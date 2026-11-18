@@ -1,0 +1,23 @@
+services:
+  database:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: webmail
+      POSTGRES_PASSWORD: local-demo-only
+      POSTGRES_DB: webmail
+    ports: ["127.0.0.1:55432:5432"]
+    volumes: [database:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U webmail -d webmail"]
+      interval: 2s
+      timeout: 3s
+      retries: 25
+  mail:
+    image: greenmail/standalone:2.1.3
+    environment:
+      GREENMAIL_OPTS: >-
+        -Dgreenmail.setup.test.smtp -Dgreenmail.setup.test.imap
+        -Dgreenmail.hostname=0.0.0.0 -Dgreenmail.auth.disabled
+    ports: ["127.0.0.1:3025:3025", "127.0.0.1:3143:3143"]
+volumes:
+  database:

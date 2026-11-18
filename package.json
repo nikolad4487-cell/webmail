@@ -1,0 +1,56 @@
+{
+  "name": "webmail",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "node --test tests/*.mjs",
+    "dev": "tsx server/index.ts",
+    "start": "NODE_ENV=production tsx server/index.ts",
+    "build": "tsc --noEmit && vite build",
+    "migrate": "tsx scripts/database.ts",
+    "seed": "tsx scripts/demo.ts",
+    "bootstrap": "tsx scripts/bootstrap.ts"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nikolad4487-cell/webmail.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "bugs": {
+    "url": "https://github.com/nikolad4487-cell/webmail/issues"
+  },
+  "homepage": "https://github.com/nikolad4487-cell/webmail#readme",
+  "dependencies": {
+    "express": "^5.3.0",
+    "imapflow": "^2.12.1",
+    "lucide-react": "^1.75.0",
+    "luxon": "^3.7.2",
+    "mailparser": "^3.14.5",
+    "nodemailer": "^10.6.0",
+    "pg": "^8.23.1",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.6",
+    "@types/luxon": "^3.7.6",
+    "@types/mailparser": "^3.9.0",
+    "@types/node": "^26.6.6",
+    "@types/nodemailer": "^8.0.2",
+    "@types/pg": "^8.23.1",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.8"
+  },
+  "private": true,
+  "engines": {
+    "node": ">=22.12"
+  }
+}

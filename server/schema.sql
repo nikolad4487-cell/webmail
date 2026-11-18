@@ -1,0 +1,17 @@
+create table if not exists organizations(id serial primary key, name text not null unique);
+create table if not exists schools(id serial primary key, org int not null references organizations, name text not null, unique(org,name), unique(org,id));
+create table if not exists domains(name text primary key check(name=lower(name)), org int not null references organizations, inbound boolean not null default true, outbound boolean not null default true, unique(org,name));
+create table if not exists users(id serial primary key, org int not null references organizations, school int, email text not null unique check(email=lower(email)), name text not null, password text not null, recovery text, role text not null default 'user' check(role in ('root','admin','user')), active boolean not null default true, foreign key(org,school) references schools(org,id));
+create table if not exists sessions(token text primary key, uid int not null references users on delete cascade, expires timestamptz not null);
+create table if not exists resets(token text primary key, uid int not null references users on delete cascade, expires timestamptz not null);
+create table if not exists login_limits(key text primary key, count int not null, expires timestamptz not null);
+create table if not exists mailboxes(id serial primary key, org int not null references organizations, address text not null unique check(address=lower(address)), label text not null, shared boolean not null default false, active boolean not null default true, target_quota_gb int not null default 15 check(target_quota_gb>0), unique(org,id));
+create table if not exists grants(uid int not null references users on delete cascade, box int not null references mailboxes on delete cascade, can_send boolean not null default false, can_calendar boolean not null default false, primary key(uid,box));
+create table if not exists aliases(address text primary key check(address=lower(address)), box int not null references mailboxes on delete cascade, send_as boolean not null default false);
+create table if not exists contacts(id serial primary key, uid int not null references users on delete cascade, name text not null, email text not null, unique(uid,email));
+create table if not exists events(id serial primary key, uid int not null references users, box int references mailboxes, title text not null, starts timestamptz not null, ends timestamptz not null check(ends>starts), attendees text[] not null default '{}');
+create table if not exists senders(id serial primary key, org int not null references organizations, address text not null unique, reply_to text not null, kind text not null check(kind in ('order','promotion')), active boolean not null default true);
+create table if not exists subscriptions(sender int not null references senders, list text not null, recipient text not null, allowed boolean not null, primary key(sender,list,recipient));
+create table if not exists deliveries(id serial primary key, sender int not null references senders, external_id text not null, recipient text not null, list text not null default '', status text not null check(status in ('pending','submitted','failed','delivered','unknown')), at timestamptz not null default now(), unique(sender,external_id,recipient,list));
+create unique index if not exists deliveries_order_event on deliveries(sender,external_id) where list='';
+create table if not exists audits(id serial primary key, uid int references users, action text not null, target text not null, at timestamptz not null default now());

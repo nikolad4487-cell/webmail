@@ -1,0 +1,27 @@
+services:
+  quota-mail:
+    image: ghcr.io/docker-mailserver/docker-mailserver:15.1.0
+    hostname: mail.webmail.test
+    environment:
+      SSL_TYPE: manual
+      SSL_CERT_PATH: /tmp/docker-mailserver/tls/cert.pem
+      SSL_KEY_PATH: /tmp/docker-mailserver/tls/key.pem
+      ENABLE_QUOTAS: "1"
+      ENABLE_OPENDKIM: "0"
+      ENABLE_OPENDMARC: "0"
+      ENABLE_POLICYD_SPF: "0"
+      ENABLE_AMAVIS: "0"
+      ENABLE_FAIL2BAN: "0"
+      ENABLE_CLAMAV: "0"
+      ENABLE_RSPAMD: "0"
+      POSTMASTER_ADDRESS: postmaster@formapoint.test
+    ports:
+      - "127.0.0.1:3993:993"
+      - "127.0.0.1:3465:465"
+    volumes:
+      - ./.quota-demo:/tmp/docker-mailserver
+      - quota-mail:/var/mail
+      - quota-state:/var/mail-state
+volumes:
+  quota-mail:
+  quota-state:
