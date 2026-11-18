@@ -8,11 +8,14 @@ import {Admin} from './admin';
 import './style.css';
 
 function Brand(){return <span className="brand"><span className="brand-icon"><Mail size={22}/></span>Webmail<span>HR</span></span>}
+const adminHostname='admin.webmailhr.com';
+const onAdminDomain=location.hostname===adminHostname;
+const onPublicDomain=['www.webmailhr.com','webmailhr.com'].includes(location.hostname);
 
 function Login({onLogin,demo}:{onLogin:()=>Promise<void>;demo:boolean}){
   const reset=new URLSearchParams(location.search).get('reset');
   const [mode,setMode]=useState(reset?'reset':'login'),[visible,setVisible]=useState(false);
-  const adminLogin=location.pathname==='/admin/prijava' || !!reset;
+  const adminLogin=onAdminDomain || (!onPublicDomain && (location.pathname==='/admin/prijava' || !!reset));
   const [error,setError]=useState(''),[notice,setNotice]=useState(''),[busy,setBusy]=useState(false);
   async function submit(event:FormEvent<HTMLFormElement>){
     event.preventDefault();
@@ -44,12 +47,12 @@ function Login({onLogin,demo}:{onLogin:()=>Promise<void>;demo:boolean}){
       <button className="primary" disabled={busy}>{busy?'Pričekajte…':mode==='login'?'Prijavi se':mode==='recover'?'Pošalji poveznicu':'Spremi lozinku'}</button>
     </form>
     {mode!=='login'&&<button className="link login-back" onClick={()=>{setMode('login');setError('');setNotice('');}}><ArrowLeft size={16}/> Povratak na prijavu</button>}
-    {mode==='login'&&<a className="link login-back" href={adminLogin?'/':'/admin/prijava'}>{adminLogin?'Prijava u WebmailHR':'Prijava administratora'}</a>}
+    {mode==='login'&&<a className="link login-back" href={adminLogin?(onAdminDomain?'https://webmailhr.com/':'/'):(onPublicDomain?`https://${adminHostname}/admin/prijava`:'/admin/prijava')}>{adminLogin?'Prijava u WebmailHR':'Prijava administratora'}</a>}
     {demo&&mode==='login'&&!adminLogin&&<button className="secondary demo-button" disabled={busy} onClick={async()=>{setBusy(true);setError('');try{await api('/auth/admin-login','POST',{identifier:'lena@formapoint.test',password:'Webmail-Test-2026'});await onLogin();}catch(e){setError(toError(e));}finally{setBusy(false);}}}>Otvori probni sandučić</button>}
   </section></div><div className="envelope-art" aria-hidden="true"><Mail strokeWidth={.45}/></div></div>;
 }
 const navigation=[{key:'mail',label:'Pošta',path:'/',icon:Mail},{key:'calendar',label:'Kalendar',path:'/kalendar',icon:CalendarDays},{key:'contacts',label:'Kontakti',path:'/kontakti',icon:UsersRound},{key:'admin',label:'Administracija',path:'/admin',icon:Settings}];
-const getPage=()=>navigation.slice(1).find(x=>location.pathname.startsWith(x.path))?.key||'mail';
+const getPage=()=>navigation.slice(1).find(x=>location.pathname.startsWith(x.path))?.key||(onAdminDomain?'admin':'mail');
 function App(){
   const [session,setSession]=useState<Session|null>(null),[loading,setLoading]=useState(true),[demo,setDemo]=useState(false),[page,setPage]=useState(getPage),[accountOpen,setAccountOpen]=useState(false),[recipient,setRecipient]=useState('');
   async function load(){setSession(await api<Session>('/me'));}
@@ -67,7 +70,7 @@ function App(){
     <a href="/" onClick={e=>{e.preventDefault();open('mail');}}><Brand/></a>
     <nav aria-label="Glavna navigacija">{navigation.filter(x=>x.key!=='admin').map(({key,label,icon:Icon})=><button key={key} className={page===key?'active':''} onClick={()=>open(key)}><Icon size={18}/>{label}</button>)}</nav>
     <div className="account"><button className="account-button" onClick={()=>setAccountOpen(!accountOpen)} aria-expanded={accountOpen}><span className="avatar small">{initials(session.account.name)}</span><span className="account-name">{session.account.name}<small>{session.account.email}</small></span><ChevronDown size={15}/></button>
-      {accountOpen&&<div className="account-menu">{session.account.role!=='user'&&<button onClick={()=>open('admin')}><Settings size={17}/> Administracija</button>}<button onClick={async()=>{await api('/logout','POST').catch(()=>{});setSession(null);setAccountOpen(false);history.replaceState(null,'','/');setPage('mail');}}><LogOut size={17}/> Odjavi se</button></div>}
+      {accountOpen&&<div className="account-menu">{session.account.role!=='user'&&<button onClick={()=>open('admin')}><Settings size={17}/> Administracija</button>}<button onClick={async()=>{await api('/logout','POST').catch(()=>{});setSession(null);setAccountOpen(false);history.replaceState(null,'','/');setPage(getPage());}}><LogOut size={17}/> Odjavi se</button></div>}
     </div>
   </header>
   {page==='mail'&&<Mailbox session={session} recipient={recipient} clearRecipient={()=>setRecipient('')}/>}

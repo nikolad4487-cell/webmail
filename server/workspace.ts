@@ -179,7 +179,7 @@ export function setupData(api:Router){
         if(kind==='ednevnik' && !schoolAddress) throw new HttpError(400,'Odaberite školsku WebmailHR adresu.');
         if(kind==='ednevnik' && input.role!=='user') throw new HttpError(400,'Učenik mora imati ulogu korisnika.');
         if(kind==='local'){
-          const allowed=input.role==='root' || (demo && address.endsWith('.test'));
+          const allowed=input.role!=='user' || (demo && address.endsWith('.test'));
           if(!allowed && (!current || current.auth_kind!=='local' || input.password)) throw new HttpError(400,'Odaberite vrstu prijave za ovog korisnika.');
           if(input.password) input.password=await hashPassword(String(input.password));
           else if(!current?.password || current.auth_kind!=='local') throw new HttpError(400,'Unesite početnu lozinku.');
