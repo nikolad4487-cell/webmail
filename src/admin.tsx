@@ -11,7 +11,7 @@ const sections={
   organizations:{label:'Organizacije',icon:Building2,fields:[name]},
   schools:{label:'Škole i ustanove',icon:School,fields:[name]},
   domains:{label:'Domene',icon:Globe,fields:[{key:'name',label:'Domena'},{key:'inbound',label:'IMAP / primanje',type:'check'},{key:'outbound',label:'SMTP / slanje',type:'check'}]},
-  users:{label:'Korisnici',icon:UsersRound,fields:[name,{...address,key:'email'},{key:'school',label:'Škola ili ustanova',type:'school',optional:true},{key:'role',label:'Uloga',options:[['user','Korisnik'],['admin','Administrator organizacije'],['root','Glavni administrator']] as [string,string][]},active,{key:'auth_kind',label:'Vrsta računa',options:accountKinds.map(([key,label]):[string,string]=>[key,label])},{key:'source_user_id',label:'Stabilni ID korisnika',optional:true},{key:'recovery',label:'Potvrđena adresa za oporavak',type:'email',optional:true},{key:'password',label:'Lozinka',type:'password'}]},
+  users:{label:'Korisnici',icon:UsersRound,fields:[name,{...address,key:'email'},{key:'school',label:'Škola ili ustanova',type:'school',optional:true},{key:'role',label:'Uloga',options:[['user','Korisnik'],['admin','Administrator organizacije'],['root','Glavni administrator']] as [string,string][]},active,{key:'auth_kind',label:'Vrsta računa',options:accountKinds.map(([key,label]):[string,string]=>[key,label])},{key:'source_username',label:'Korisničko ime iz izvornog sustava',optional:true},{key:'source_user_id',label:'Stabilni ID korisnika',optional:true},{key:'recovery',label:'Potvrđena adresa za oporavak',type:'email',optional:true},{key:'password',label:'Lozinka',type:'password'}]},
   mailboxes:{label:'Sandučići',icon:Inbox,fields:[address,{key:'label',label:'Naziv'},{key:'shared',label:'Zajednički sandučić',type:'check'},active,{key:'target_quota_gb',label:'Ciljana kvota (GB)',type:'number'}]},
   senders:{label:'Automatski pošiljatelji',icon:Send,fields:[address,{...address,key:'reply_to',label:'Adresa za odgovor'},{key:'kind',label:'Namjena',options:[['order','Narudžbe'],['promotion','Promocije']] as [string,string][]},active]},
   logs:{label:'Zapisi dostave',icon:ClipboardList,fields:[address,{key:'external_id',label:'Događaj'},{key:'recipient',label:'Primatelj'},{key:'status',label:'Status'},{key:'at',label:'Vrijeme'}]},
@@ -55,7 +55,7 @@ export function Admin({session}:{session:Session}){
   }
   function showField(field:Field){
     if(section!=='users')return true;
-    if(field.key==='source_user_id')return usesUsername(kind);
+    if(['source_user_id','source_username'].includes(field.key))return usesUsername(kind);
     if(['password','recovery'].includes(field.key))return kind==='local';
     return true;
   }
@@ -74,7 +74,7 @@ export function Admin({session}:{session:Session}){
     catch(e){setError(toError(e));}finally{setStorageBusy(false);}
   }
   const filtered=rows.filter(row=>(!filter||String(row.org)===filter)&&Object.values(row).some(x=>String(x).toLowerCase().includes(search.toLowerCase())));
-  const visible=fields.filter(x=>!['password','recovery','source_user_id'].includes(x.key));
+  const visible=fields.filter(x=>!['password','recovery','source_user_id','source_username'].includes(x.key));
   const display=(value:RecordRow[string],field:Field)=>{
     if(typeof value==='boolean')return value?'Da':'Ne';
     if(field.key==='status')return <span className={'status '+String(value)}>{statuses[String(value)]}</span>;
@@ -100,7 +100,7 @@ export function Admin({session}:{session:Session}){
         if(f.type==='check')return <label className="check" key={f.key}><input name={f.key} type="checkbox" defaultChecked={typeof value==='boolean'?value:f.key!=='shared'}/>{f.label}</label>;
         if(f.type==='school')return <label key={f.key}>{f.label}<select name={f.key} defaultValue={String(value??'')}><option value="">Bez odabira</option>{schools.filter(x=>!org||String(x.org)===org).map(x=><option key={String(x.id)} value={String(x.id)}>{x.name}</option>)}</select></label>;
         if(f.options)return <label key={f.key}>{f.label}<select name={f.key} defaultValue={String(value??f.options[0][0])}>{f.options.filter(x=>root||f.key!=='role'||x[0]==='user').map(([key,label])=><option key={key} value={key}>{label}</option>)}</select></label>;
-        return <label key={f.key}>{f.label}<input name={f.key} type={f.type||'text'} defaultValue={String(value??(f.key==='target_quota_gb'?15:''))} required={f.key==='source_user_id'||(!f.optional&&!(f.key==='password'&&!!edit.id&&edit.auth_kind==='local'))} minLength={f.key==='password'?12:undefined}/></label>;
+        return <label key={f.key}>{f.label}<input name={f.key} type={f.type||'text'} defaultValue={String(value??(f.key==='target_quota_gb'?15:''))} required={f.key==='source_user_id'||(f.key==='source_username'&&(!edit.id||edit.auth_kind!==kind))||(!f.optional&&!(f.key==='password'&&!!edit.id&&edit.auth_kind==='local'))} minLength={f.key==='password'?12:undefined} maxLength={f.key==='source_username'?254:undefined}/></label>;
       })}{error&&<p className="error">{error}</p>}<button className="primary">Spremi</button>
     </form></section></div>}
     {pin!==undefined&&<div className="modal-backdrop"><section className="modal" role="dialog" aria-modal="true" aria-labelledby="staff-pin-title"><div className="reader-heading"><h2 id="staff-pin-title">Nova lozinka djelatnika</h2></div><p>Lozinka se prikazuje samo sada. Predajte je djelatniku sigurnim kanalom.</p><output className="staff-pin">{pin}</output><button className="primary" onClick={()=>setPin(undefined)}>Zatvori</button></section></div>}

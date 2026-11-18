@@ -3,6 +3,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 export PORT="${PORT:-3001}"
 export APP_ORIGIN="http://127.0.0.1:$PORT"
+export ADMIN_ORIGIN="http://localhost:$PORT"
 export UNSUBSCRIBE_SECRET="local-test-key-not-for-production"
 export RECOVERY_SENDER="info@formapoint.test"
 order="$(printf '%s' 'order_test_key_only_0000000000000000' | sha256sum | cut -d' ' -f1)"

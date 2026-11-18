@@ -6,8 +6,8 @@ export const authKind=z.enum(['local','staff','ednevnik','formapoint']);
 export type ExternalKind='ednevnik'|'formapoint';
 export const externalKind=(kind:string):kind is ExternalKind=>kind==='ednevnik'||kind==='formapoint';
 export const sourceId=z.string().trim().min(1).max(200);
-export const invalidLogin=()=>new HttpError(401,'Korisničko ime, adresa ili lozinka nije ispravna.');
-const unavailable=()=>new HttpError(503,'Prijava putem odabranog sustava trenutačno nije dostupna.');
+export const invalidLogin=()=>new HttpError(401,'Prijava nije uspjela. Provjerite lozinku i pokušajte s punom adresom svojeg WebmailHR računa.');
+const unavailable=()=>new HttpError(503,'Prijava trenutačno nije dostupna.');
 
 function project(kind:ExternalKind){
   const prefix=kind==='ednevnik'?'EDNEVNIK':'FORMAPOINT';
