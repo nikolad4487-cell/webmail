@@ -1,0 +1,11 @@
+{
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist",
+  "rewrites": [
+    { "source": "/api/:path*", "destination": "/api/index" },
+    { "source": "/admin", "destination": "/index.html" },
+    { "source": "/admin/prijava", "destination": "/index.html" },
+    { "source": "/kalendar", "destination": "/index.html" },
+    { "source": "/kontakti", "destination": "/index.html" }
+  ]
+}

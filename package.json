@@ -10,7 +10,8 @@
     "build": "tsc --noEmit && vite build",
     "migrate": "tsx scripts/database.ts",
     "seed": "tsx scripts/demo.ts",
-    "bootstrap": "tsx scripts/bootstrap.ts"
+    "bootstrap": "tsx scripts/bootstrap.ts",
+    "admin:password": "tsx scripts/set-admin-password.ts"
   },
   "repository": {
     "type": "git",

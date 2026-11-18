@@ -1,6 +1,6 @@
 import {type Request} from 'express';
 import {z} from 'zod';
-import {HttpError} from './mail';
+import {HttpError} from './mail.js';
 export const email=z.string().trim().toLowerCase().email().max(254);
 export const id=z.coerce.number().int().positive();
 export const text=z.string().trim().min(1).max(240);

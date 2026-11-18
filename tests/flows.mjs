@@ -128,6 +128,7 @@ test('Oporavak preko potvrđene adrese, jednokratan token i opoziv sesije',async
   const previous=new Set((await request(mailbox,{cookie:mia.cookie})).body.map(row=>row.id));
   await request('/recover',{body:{email:address}});
   let key;
+  const newPassword=run.slice(0,8);
   for(let i=0;i<18&&!key;i++){
     const {body:rows}=await request(mailbox,{cookie:mia.cookie});
     const row=rows.find(x=>!previous.has(x.id) && x.subject==='Ponovno postavljanje lozinke');
@@ -135,7 +136,8 @@ test('Oporavak preko potvrđene adrese, jednokratan token i opoziv sesije',async
       const {body:mail}=await request(mailbox+'/message?'+new URLSearchParams({id:String(row.id),path:row.path}),{cookie:mia.cookie});
       key=mail.text.match(/\?reset=([a-f0-9]{64})/)?.[1];
       if(key){
-        const response=await request('/reset',{body:{key,password:'New-Webmail-Test-2026'},status:200});
+        await request('/reset',{body:{key,password:newPassword.slice(0,7)},status:400});
+        const response=await request('/reset',{body:{key,password:newPassword},status:200});
         assert.equal(response.body.ok,true);
         break;
       }
@@ -145,7 +147,7 @@ test('Oporavak preko potvrđene adrese, jednokratan token i opoziv sesije',async
   assert.ok(key);
   await request('/reset',{body:{key,password:'Other-Webmail-Test-2026'},status:400});
   await request('/me',{cookie:old.cookie,status:401});
-  await request('/login',{body:{identifier:address,password:'New-Webmail-Test-2026'}});
+  await request('/login',{body:{identifier:address,password:newPassword}});
 });
 
 async function provision(kind,username,address,org,sourceEmail=null){
