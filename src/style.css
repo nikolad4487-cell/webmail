@@ -13,3 +13,4 @@ input:not([type=checkbox]):not([type=file]),select,textarea{width:100%;min-width
 @media(max-width:370px){.form-grid{grid-template-columns:1fr}.login-options{align-items:flex-start;flex-direction:column}}
 .storage-admin{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;font-size:.85rem}.storage-summary{padding:12px;margin-top:10px;border-radius:8px;background:#ececfd;font-size:.83rem}
 .thread-links{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:13px}.thread-links .secondary{font-size:.76rem;min-height:32px;padding:6px 9px}.thread-links .secondary[aria-pressed=true]{color:var(--primary-dark);border-color:#cac7f7;background:var(--wash)}
+.staff-pin{display:block;margin:1rem 0;padding:.8rem 1rem;border-radius:8px;background:var(--wash);font:700 1.75rem ui-monospace,monospace;letter-spacing:.16em;width:fit-content}

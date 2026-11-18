@@ -15,3 +15,18 @@ create table if not exists subscriptions(sender int not null references senders,
 create table if not exists deliveries(id serial primary key, sender int not null references senders, external_id text not null, recipient text not null, list text not null default '', status text not null check(status in ('pending','submitted','failed','delivered','unknown')), at timestamptz not null default now(), unique(sender,external_id,recipient,list));
 create unique index if not exists deliveries_order_event on deliveries(sender,external_id) where list='';
 create table if not exists audits(id serial primary key, uid int references users, action text not null, target text not null, at timestamptz not null default now());
+
+alter table users alter column password drop not null;
+alter table users add column if not exists auth_kind text not null default 'local'
+  check (auth_kind in ('local','staff','ednevnik','formapoint'));
+alter table users add column if not exists source_project text;
+alter table users add column if not exists source_user_id text;
+create unique index if not exists users_source_identity on users(source_project,source_user_id);
+do $$ begin
+  if not exists (select 1 from pg_constraint where conrelid='users'::regclass and conname='users_auth_identity') then
+    alter table users add constraint users_auth_identity check (
+      (auth_kind in ('local','staff') and source_project is null and source_user_id is null)
+      or (auth_kind in ('ednevnik','formapoint') and source_project is not null and source_user_id is not null and password is null)
+    );
+  end if;
+end $$;

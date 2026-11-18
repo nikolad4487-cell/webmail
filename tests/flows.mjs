@@ -147,3 +147,96 @@ test('Oporavak preko potvrđene adrese, jednokratan token i opoziv sesije',async
   await request('/me',{cookie:old.cookie,status:401});
   await request('/login',{body:{email:address,password:'New-Webmail-Test-2026'}});
 });
+
+async function provision(kind,username,address,org){
+  const {cookie}=await login('lena@formapoint.test');
+  const previous=(await request('/admin/users',{cookie})).body.find(x=>x.email===address);
+  await request('/admin/users',{cookie,body:{key:previous?.id,org,email:address,name:'Probni '+kind,school:null,role:'user',active:true,recovery:null,
+    auth_kind:kind,source_user_id:username}});
+  const {body}=await request('/admin/users',{cookie});
+  const account=body.find(x=>x.email===address);
+  assert.ok(account);
+  assert.equal(account.password,undefined);
+  return account;
+}
+
+test('Odvojeni projekti, isti korisnički identifikator i provjera nove izvorne lozinke',async()=>{
+  const {cookie:admin,boxes:businessBoxes}=await login('lena@formapoint.test');
+  const {body:orgs}=await request('/admin/organizations',{cookie:admin});
+  const school=orgs.find(x=>x.name==='ŠkoleHR').id, business=orgs.find(x=>x.name==='FormaPoint').id;
+  const username='shared-'+run, initial='Source-Test-2026', next='Source-Changed-2026';
+  const studentAddress='ucenik@skolehr.test';
+  const support=businessBoxes.find(x=>x.address==='info@formapoint.test');
+  const external=(kind,password=initial,status=200)=>request('/login',{body:{kind,username,password},status});
+  const missing=await external('ednevnik',initial,403);
+  assert.match(missing.body.error,/dodijeliti pristup/);
+  assert.equal(missing.cookie,undefined);
+  const student=await provision('ednevnik',username,studentAddress,school);
+  const employee=await provision('formapoint',username,'kupac-'+run+'@formapoint.test',business);
+  assert.equal(student.source_project,'ednevnik-test');
+  assert.equal(employee.source_project,'formapoint-test');
+  assert.equal(student.source_user_id,employee.source_user_id);
+  await external('formapoint',initial,403);
+  let {body:boxes}=await request('/admin/mailboxes',{cookie:admin});
+  if(!boxes.some(x=>x.address===studentAddress)){
+    await request('/admin/mailboxes',{cookie:admin,body:{org:school,address:studentAddress,label:'Učenik',shared:false,active:true,target_quota_gb:15}});
+    boxes=(await request('/admin/mailboxes',{cookie:admin})).body;
+  }
+  const studentBox=boxes.find(x=>x.address===studentAddress);
+  const schoolOffice=boxes.find(x=>x.address==='referada@skolehr.test');
+  async function grant(uid,box,remove=false){
+    await request('/admin/access/'+box,{cookie:admin,method:'PUT',body:{kind:'grant',uid,remove,can_send:true,can_calendar:false}});
+  }
+  await grant(student.id,studentBox.id,true);
+  await grant(student.id,schoolOffice.id);
+  await external('ednevnik',initial,403);
+  await grant(student.id,studentBox.id);
+  await grant(employee.id,support.id);
+  for(const [kind,port,expected,denied] of [
+    ['ednevnik',3014,studentBox.id,schoolOffice.id],['formapoint',3015,support.id,studentBox.id],
+  ]){
+    const {cookie}=await external(kind);
+    const me=await request('/me',{cookie});
+    assert.deepEqual(me.body.boxes.map(box=>box.id),[expected]);
+    await request('/mail/'+denied+'/attachment?path=INBOX&id=1&index=0',{cookie,status:403});
+    await request('/mail/'+expected,{cookie});
+    const change=await fetch('http://127.0.0.1:'+port+'/_test/change-password',{method:'POST',body:JSON.stringify({username,oldPassword:initial,newPassword:next})});
+    assert.equal(change.status,200);
+    await external(kind,initial,401);
+    const updated=await external(kind,next);
+    assert.ok(updated.cookie);
+    if(kind==='ednevnik'){
+      await external('formapoint',next,401);
+      await external('formapoint',initial);
+    }
+  }
+});
+
+test('Osmeroznamenkasta lozinka djelatnika, ograničenje pokušaja i opoziv sesije',async()=>{
+  const {cookie:admin}=await login('lena@formapoint.test');
+  const {body:orgs}=await request('/admin/organizations',{cookie:admin});
+  const org=orgs.find(x=>x.name==='ŠkoleHR').id, email='nastavnik-'+run+'@skolehr.test';
+  const staff=await provision('staff',null,email,org);
+  const {body:boxes}=await request('/admin/mailboxes',{cookie:admin});
+  const referada=boxes.find(x=>x.address==='referada@skolehr.test');
+  const privateBox=boxes.find(x=>x.address==='mia@skolehr.test');
+  await request('/admin/access/'+referada.id,{cookie:admin,method:'PUT',body:{kind:'grant',uid:staff.id,remove:false,can_send:false,can_calendar:false}});
+  const pinUrl='/admin/users/'+staff.id+'/pin';
+  const {body:first}=await request(pinUrl,{cookie:admin,method:'POST'});
+  assert.match(first.pin,/^[0-9]{8}$/);
+  const staffLogin=(password,status=200)=>request('/login',{body:{kind:'staff',email,password},status});
+  const {cookie}=await staffLogin(first.pin);
+  assert.deepEqual((await request('/me',{cookie})).body.boxes.map(box=>box.id),[referada.id]);
+  await request('/mail/'+referada.id,{cookie});
+  await request('/mail/'+privateBox.id,{cookie,status:403});
+  await request(pinUrl,{cookie,method:'POST',status:403});
+  await request('/login',{body:{kind:'local',email,password:first.pin},status:401});
+  for(let i=0;i<6;i++)await staffLogin('1234567',401);
+  await staffLogin(first.pin,429);
+  const {body:second}=await request(pinUrl,{cookie:admin,method:'POST'});
+  assert.match(second.pin,/^[0-9]{8}$/);
+  assert.notEqual(second.pin,first.pin);
+  await request('/me',{cookie,status:401});
+  await staffLogin(first.pin,401);
+  assert.ok((await staffLogin(second.pin)).cookie);
+});

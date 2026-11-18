@@ -1,6 +1,6 @@
 # WebmailHR
 
-Webmail na hrvatskom za organizacije, škole i fakultete. Jedna prijava adresom e-pošte daje pristup sandučićima, adresama za slanje i kalendarima koji su korisniku dodijeljeni u PostgreSQL-u. Poruke, mape, privitci i stvarne kvote dolaze s poštanskog poslužitelja.
+Webmail na hrvatskom za organizacije, škole i fakultete. Zajednički ulaz na `https://webmailhr.com` omogućuje odabir vrste računa i daje pristup sandučićima, adresama za slanje i kalendarima koji su korisniku dodijeljeni u PostgreSQL-u. Poruke, mape, privitci i stvarne kvote dolaze s poštanskog poslužitelja.
 
 ## Lokalno pokretanje
 
@@ -18,16 +18,18 @@ Pričekajte pokretanje Postfixa i Dovecota prije sjetve. Ako IMAP još nije spre
 
 Lokalni Postfix zahtijeva autentifikaciju na portu 3465, Dovecot koristi IMAPS na 3993. Node izričito vjeruje samo lokalnom certifikatu generiranom za taj primjer. Dovecot primjenjuje 15 GiB. Pri isteku certifikata generirajte novi par u `.quota-demo/tls` i ponovno pokrenite servis. Alternativno, `docker compose up -d --wait` pokreće lakši GreenMail bez TLS-a i stvarne kvote. U tom slučaju izostavite `DEMO_TLS=1`. Demo aplikacija odbija odredišta izvan `.test`. Testne servise ostavite vezane na loopback.
 
-U drugom terminalu pokrenite integracijski poslužitelj, a zatim provjere:
+U zasebnim terminalima pokrenite lokalne simulacije izvora prijave, integracijski poslužitelj i provjere:
 
 ```sh
+node scripts/mock-auth.mjs
+# Drugi terminal
 DEMO_TLS=1 bash scripts/test-env.sh npm run dev
-# U zasebnom terminalu
+# Treći terminal
 DEMO_TLS=1 npm test
 npm run build
 ```
 
-Testovi provjeravaju izolaciju škola, pristup referadi, zabranu tuđeg privitka i pošiljatelja, SMTP/IMAP u oba smjera, sadržaj privitka, kvotu, jednu kopiju u Poslano, kalendar, .ics, ograničenje ključa, idempotentnost i odjavu. GreenMail varijanta provjerava i ispravan odgovor kad poslužitelj ne oglašava IMAP QUOTA.
+Testovi provjeravaju izolaciju škola, pristup referadi, zabranu tuđeg privitka i pošiljatelja, SMTP/IMAP u oba smjera, sadržaj privitka, kvotu, jednu kopiju u Poslano, kalendar, .ics, ograničenje ključa, idempotentnost i odjavu. Provjeravaju i tri vrste prijave, isto korisničko ime i izvorni ID u oba projekta, promjenu izvorne lozinke, generiranje i reset PIN-a, opoziv sesije i pristup samo dodijeljenim sandučićima. Lokalni servisi simuliraju sučelja Supabase Auth i vlastite serverske prijave. GreenMail varijanta provjerava i ispravan odgovor kad poslužitelj ne oglašava IMAP QUOTA.
 
 ## Produkcija
 
@@ -46,6 +48,24 @@ Testovi provjeravaju izolaciju škola, pristup referadi, zabranu tuđeg privitka
 ```
 
 SMTP s `secure:false` zahtijeva STARTTLS, IMAP s `secure:false` također zahtijeva STARTTLS. Certifikati se provjeravaju. Zajednički sandučić koristi odvojeni servisni pristup ograničen na taj sandučić. Dopuštenje aplikacije provjerava se prije IMAP-a i SMTP-a, a SMTP servis mora odbiti slanje s adresa izvan dodijeljenog identiteta i njegovih aliasa. Onemogućite automatsko kopiranje u Poslano na pružatelju ako je uključeno, jer WebmailHR nakon potvrđene predaje sprema jednu IMAP kopiju. Kod nepoznatog SMTP ishoda ili greške pri spremanju kopije provjerite zapis servisa prije ponovne predaje.
+
+## Prijava i povezivanje s izvornim računima
+
+- **Učenik · e-Dnevnik** koristi postojeće korisničko ime i lozinku. WebmailHR traži aktivan, osobni sandučić koji je dodijeljen tom korisniku i odgovara njegovoj adresi `@skolehr.xyz`.
+- **Školski djelatnik** koristi punu WebmailHR adresu i točno osam ASCII znamenaka. Nakon spremanja računa odaberite **Generiraj / resetiraj lozinku** u administraciji korisnika. Predajte prikazanu vrijednost sigurnim kanalom. Prikazuje se jednom, uključujući početne nule. U bazi ostaje samo hash, a izdavanje nove lozinke opoziva postojeće sesije. Postavite `STAFF_PIN_PEPPER` na nasumičnu serversku tajnu od najmanje 32 znaka. Ako rotirate tu tajnu, izdajte nove lozinke djelatnicima.
+- **FormaPoint** provjerava korisničko ime i lozinku u vlastitom projektu te prikazuje samo dodijeljene sandučiće. Dodijelite `info@formapoint.online` isključivo ovlaštenim djelatnicima.
+- **Glavni administrator / probni račun** koristi postojeću lokalnu prijavu e-mailom. Lokalni računi koji nisu glavni administratori mogu se prijaviti u demo okruženju s adresama `.test`. Nakon migracije postojećim produkcijskim korisnicima odaberite odgovarajuću vrstu računa u administraciji.
+
+Za svaki izvor zasebno potvrdite postojeći postupak prijave u njegovoj konfiguraciji ili kodu. Postavite `EDNEVNIK_SUPABASE_PROJECT_ID` i `FORMAPOINT_SUPABASE_PROJECT_ID` na različite stabilne reference projekata (project ref) te odgovarajuće `*_SUPABASE_URL` na različite HTTPS ulaze projekata. U tablici korisnika odaberite vrstu računa i unesite stabilni ID iz tog projekta, npr. `auth.users.id` za Supabase Auth. Aplikacija sprema par project ref + izvorni ID. Korisničko ime, e-mail izvornog sustava i metapodaci izvora ne daju ovlast za poštu. Nakon povezivanja dodijelite potrebne sandučiće. Prijava s ispravnom izvornom lozinkom bez dodjele prikazuje poruku o potrebnoj dodjeli.
+
+| Način izvornog sustava | Postavke s prefiksom `EDNEVNIK_` ili `FORMAPOINT_` |
+| --- | --- |
+| Supabase Auth s e-mailom ili telefonom | `SUPABASE_AUTH_KEY` je ključ projekta za Auth/Gateway (publishable ili anon). `USERNAME_RPC` je ime ograničene RPC funkcije. `USERNAME_RPC_TOKEN` je serverski Bearer JWT s dozvolom izvršenja samo potrebnog postupka, prema ulozi definiranoj u projektu. |
+| Postojeća serverska provjera korisničkim imenom | `USERNAME_LOGIN_URL` je puni HTTPS URL postojećeg postupka ili njegova tankog adaptera. `USERNAME_LOGIN_TOKEN` je njegov serverski Bearer ključ. Kad je URL postavljen, koristi se taj postupak. |
+
+RPC prima JSON `{"username":"..."}` i vraća objekt s točno jednim identifikatorom `{"email":"..."}` ili `{"phone":"+..."}`, odnosno JSON `null` ako korisnik ne postoji. Koristi postojeća pravila uparivanja korisničkih imena i smije vratiti samo jedno jednoznačno podudaranje. Funkciji ukinite javni `EXECUTE` i dopustite ga samo namjenskoj ulozi. RPC ne prima lozinku. WebmailHR šalje identifikator i lozinku na `/auth/v1/token?grant_type=password` istog projekta i koristi samo `user.id` iz uspješne provjere.
+
+Postojeći serverski postupak ili adapter prima `{"username":"...","password":"..."}` i nakon stvarne provjere vraća `{"user_id":"stabilni-id"}`. Za nevaljane pristupne podatke vraća HTTP 401. Adapter provjerava Bearer ključ prije obrade i koristi izvorni postupak, bez dnevnika koji sadrži tijela zahtjeva ili lozinke. Ako projekt koristi dodatne korake kao što je višefaktorska provjera, prvo potvrdite podržani serverski postupak koji poštuje ta pravila. WebmailHR ne sprema izvorne lozinke ni tokene i provjerava lozinku pri svakoj novoj prijavi. Već izdana WebmailHR sesija ima vlastiti rok važenja.
 
 ## Domene i DNS
 

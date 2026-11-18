@@ -1,3 +1,4 @@
+import {authKind,externalKind,invalidLogin,staffSecret,verifyExternal} from './identity';
 import express, {type Request} from 'express';
 import {createServer as createHttpServer} from 'node:http';
 import {resolve} from 'node:path';
@@ -37,22 +38,49 @@ async function limit(key:string, max:number) {
   if(rows[0].count>max) throw new HttpError(429,'Previše pokušaja. Pokušajte ponovno za 15 minuta.');
 }
 api.get('/health',async (_req,res)=>{await db.query('select 1');res.json({ok:true,demo});});
+const localAccount = "(role='root' or ($2::boolean and right(email,5)='.test'))";
+const studentBox = "(u.auth_kind<>'ednevnik' or (m.address=u.email and not m.shared and (right(u.email,12)='@skolehr.xyz' or ($2::boolean and right(u.email,13)='@skolehr.test'))))";
+const noMailbox=()=>new HttpError(403,'Prijava je uspjela. Administrator treba dodijeliti pristup sandučiću.');
 api.post('/login',async (req,res)=>{
-  const input=z.object({email,password:z.string().min(1).max(512),remember:z.boolean().optional()}).parse(req.body);
+  const input=z.object({kind:authKind.default('local'),username:z.string().trim().min(1).max(254).optional(),
+    email:z.string().optional(),password:z.string().min(1).max(512),remember:z.boolean().optional()}).parse(req.body);
+  const {kind,password}=input;
+  const identifier=externalKind(kind)?z.string().trim().min(1).max(254).parse(input.username):email.parse(input.email);
+  const rateKey='login:'+(kind==='local'?'':kind+':')+identifier.toLowerCase();
   await limit('ip:'+req.ip,80);
-  await limit('login:'+input.email,12);
-  const {rows:[account]}=await db.query('select * from users where email=$1 and active',[input.email]);
-  const matches=await verifyPassword(input.password,account?.password ?? fallback);
-  if(!matches || !account) throw new HttpError(401,'E-mail adresa ili lozinka nije ispravna.');
-  await db.query('delete from login_limits where key=$1',[digest('login:'+input.email)]);
+  await limit(rateKey,kind==='staff'?6:12);
+  let verifiedId:number, checkedHash:string|null=null;
+  let source:{projectId:string;userId:string}|undefined;
+  if(externalKind(kind)){
+    source=await verifyExternal(kind,identifier,password);
+    const {rows:[account]}=await db.query('select id from users where auth_kind=$1 and source_project=$2 and source_user_id=$3 and active',
+      [kind,source.projectId,source.userId]);
+    if(!account) throw noMailbox();
+    verifiedId=account.id;
+  }else{
+    const scope=kind==='local'?" and (role='root' or ($3::boolean and right(email,5)='.test'))":'';
+    const {rows:[account]}=await db.query('select id,password from users where email=$1 and active and auth_kind=$2'+scope,kind==='local'?[identifier,kind,demo]:[identifier,kind]);
+    if(kind==='staff' && !/^[0-9]{8}$/.test(password)) throw invalidLogin();
+    const candidate=kind==='staff'?staffSecret(password):password;
+    const matches=await verifyPassword(candidate,account?.password ?? fallback);
+    if(!matches || !account?.password) throw invalidLogin();
+    verifiedId=account.id;checkedHash=account.password;
+  }
   const key=token(), lifetime=(input.remember?30:1)*86400000;
-  await db.query('insert into sessions values($1,$2,$3)',[digest(key),account.id,new Date(Date.now()+lifetime)]);
+  await transaction(async client=>{
+    const {rows:[account]}=await client.query('select password,source_project,source_user_id from users where id=$1 and auth_kind=$2 and active for update',[verifiedId,kind]);
+    if(!account || account.password!==checkedHash || (source && (account.source_project!==source.projectId || account.source_user_id!==source.userId))) throw invalidLogin();
+    if(source && !(await client.query(`select 1 from grants g join mailboxes m on m.id=g.box join users u on u.id=g.uid
+      where u.id=$1 and m.active and ${studentBox} limit 1`,[verifiedId,demo])).rowCount) throw noMailbox();
+    await client.query('delete from login_limits where key=$1',[digest(rateKey)]);
+    await client.query('insert into sessions values($1,$2,$3)',[digest(key),verifiedId,new Date(Date.now()+lifetime)]);
+  });
   res.cookie(cookie,key,{...cookieOptions,...(input.remember?{maxAge:lifetime}:{})}).json({ok:true});
 });
 api.post('/recover',async (req,res)=>{
   const address=email.parse(req.body.email);
   await limit('recovery:'+req.ip,8);
-  const {rows:[account]}=await db.query('select id,recovery from users where email=$1 and active and recovery is not null',[address]);
+  const {rows:[account]}=await db.query("select id,recovery from users where email=$1 and active and recovery is not null and auth_kind='local' and "+localAccount,[address,demo]);
   const from=process.env.RECOVERY_SENDER;
   if(account && from && origin) {
     const key=token();
@@ -69,7 +97,8 @@ api.post('/reset',async (req,res)=>{
   await transaction(async client=>{
     const {rows:[reset]}=await client.query('delete from resets where token=$1 and expires>now() returning uid',[digest(input.key)]);
     if(!reset) throw new HttpError(400,'Poveznica je istekla ili nije valjana.');
-    await client.query('update users set password=$2 where id=$1 and active',[reset.uid,secret]);
+    const updated=await client.query("update users set password=$3 where id=$1 and active and auth_kind='local' and "+localAccount,[reset.uid,demo,secret]);
+    if(!updated.rowCount) throw new HttpError(400,'Poveznica je istekla ili nije valjana.');
     await client.query('delete from sessions where uid=$1',[reset.uid]);
     await client.query('delete from resets where uid=$1',[reset.uid]);
   });
@@ -79,7 +108,7 @@ setupAutomation(api);
 api.use(async (req,_res,next)=>{
   const key=session(req);
   if(!key) throw new HttpError(401,'Prijavite se za nastavak.');
-  const {rows:[account]}=await db.query('select u.id,u.org,u.email,u.name,u.role from users u join sessions s on s.uid=u.id where s.token=$1 and s.expires>now() and u.active',[digest(key)]);
+  const {rows:[account]}=await db.query(`select u.id,u.org,u.email,u.name,u.role from users u join sessions s on s.uid=u.id where s.token=$1 and s.expires>now() and u.active and (u.auth_kind<>'local' or ${localAccount})`,[digest(key),demo]);
   if(!account) throw new HttpError(401,'Sesija je istekla.');
   Object.assign(req,{account}); next();
 });
@@ -88,11 +117,11 @@ api.get('/me',async (req,res)=>{
   const account=user(req);
   const {rows:boxes}=await db.query(`select m.id,m.address,m.label,g.can_send,g.can_calendar,
     coalesce((select array_agg(address order by address) from aliases where box=m.id and send_as),'{}') aliases
-    from mailboxes m join grants g on g.box=m.id where g.uid=$1 and m.active order by m.shared,m.id`,[account.id]);
+    from mailboxes m join grants g on g.box=m.id join users u on u.id=g.uid where g.uid=$1 and m.active and ${studentBox} order by m.shared,m.id`,[account.id,demo]);
   res.json({account,boxes,demo});
 });
 async function box(req:Request, send=false){
-  const {rows:[record]}=await db.query('select m.*,g.can_send from mailboxes m join grants g on g.box=m.id where g.uid=$1 and m.id=$2 and m.active',[user(req).id,id.parse(req.params.box)]);
+  const {rows:[record]}=await db.query(`select m.*,g.can_send from mailboxes m join grants g on g.box=m.id join users u on u.id=g.uid where g.uid=$1 and m.id=$3 and m.active and ${studentBox}`,[user(req).id,demo,id.parse(req.params.box)]);
   if(!record || (send && !record.can_send)) return deny();
   return record;
 }

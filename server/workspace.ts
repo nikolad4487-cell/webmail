@@ -1,7 +1,8 @@
+import {authKind,externalKind,generatePin,projectIdFor,sourceId,staffSecret} from './identity';
 import {type Router} from 'express';
 import {z} from 'zod';
-import {db,hashPassword,transaction} from './db';
-import {addressing,applyMailcowQuota,HttpError,quotaFor} from './mail';
+import {db,digest,hashPassword,transaction,verifyPassword} from './db';
+import {addressing,applyMailcowQuota,demo,HttpError,quotaFor} from './mail';
 import {deny,email,id,text,user} from './http';
 
 const instant=z.string().datetime({offset:true});
@@ -12,7 +13,7 @@ const tables={
   organizations:{columns:'id,name',scope:'id',schema:z.object({name:text})},
   schools:{columns:'id,org,name',scope:'org',schema:z.object({name:text})},
   domains:{columns:'name,org,inbound,outbound',scope:'org',schema:z.object({name:z.string().toLowerCase().regex(/^(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z0-9-]+$/).max(253),inbound:z.boolean(),outbound:z.boolean()})},
-  users:{columns:'id,org,school,name,email,role,active,recovery',scope:'org',schema:z.object({name:text,email,school:id.nullable(),role:z.enum(['root','admin','user']),active:z.boolean(),recovery:email.nullable(),password:z.string().min(12).max(512).optional()})},
+  users:{columns:'id,org,school,name,email,role,active,recovery,auth_kind,source_project,source_user_id',scope:'org',schema:z.object({name:text,email,school:id.nullable(),role:z.enum(['root','admin','user']),active:z.boolean(),recovery:email.nullable(),auth_kind:authKind.optional(),source_user_id:sourceId.nullable().optional(),password:z.string().min(12).max(512).optional()})},
   mailboxes:{columns:'id,org,address,label,shared,active,target_quota_gb',scope:'org',schema:z.object({address:email,label:text,shared:z.boolean(),active:z.boolean(),target_quota_gb:z.number().int().min(1).max(10000)})},
   senders:{columns:'id,org,address,reply_to,kind,active',scope:'org',schema:z.object({address:email,reply_to:email,kind:z.enum(['order','promotion']),active:z.boolean()})},
 };
@@ -128,6 +129,26 @@ export function setupData(api:Router){
     });
     res.json({ok:true});
   });
+  api.post('/admin/users/:id/pin',async(req,res)=>{
+    const a=user(req), uid=id.parse(req.params.id);
+    const pin=await transaction(async c=>{
+      const {rows:[account]}=await c.query('select * from users where id=$1 for update',[uid]);
+      if(!account || (a.role!=='root' && (account.org!==a.org || account.role!=='user'))) return deny();
+      if(account.auth_kind!=='staff') throw new HttpError(409,'Osmeroznamenkasta lozinka dostupna je samo školskim djelatnicima.');
+      let value:string, secret:string;
+      do{
+        value=generatePin();
+        secret=staffSecret(value);
+      }while(account.password && await verifyPassword(secret,account.password));
+      await c.query('update users set password=$2,recovery=null where id=$1',[uid,await hashPassword(secret)]);
+      await c.query('delete from sessions where uid=$1',[uid]);
+      await c.query('delete from resets where uid=$1',[uid]);
+      await c.query('delete from login_limits where key=$1',[digest('login:staff:'+account.email)]);
+      await c.query('insert into audits(uid,action,target) values($1,$2,$3)',[a.id,'staff.pin.rotate',String(uid)]);
+      return value;
+    });
+    res.json({pin});
+  });
   api.get('/admin/:table',async(req,res)=>{
     const a=user(req), name=tableName.parse(req.params.table), t=tables[name];
     res.json((await db.query(`select ${t.columns} from ${name} where ($1::int is null or ${t.scope}=$1) order by 1`,[a.role==='root'?null:a.org])).rows);
@@ -140,16 +161,46 @@ export function setupData(api:Router){
     const identity=name==='domains'?'name':'id';
     const requested=req.body.key==null?null:identity==='name'?tables.domains.schema.shape.name.parse(req.body.key):id.parse(req.body.key);
     if(name==='domains' && requested!==null && requested!==input.name) throw new HttpError(400,'Za novu domenu dodajte novi zapis.');
-    if(name==='users'){
-      if(input.role!=='user' && a.role!=='root') deny();
-      if(!requested && !input.password) throw new HttpError(400,'Unesite početnu lozinku.');
-      if(input.password) input.password=await hashPassword(String(input.password));
-      else delete input.password;
-    }
     await transaction(async c=>{
+      let current;
       if(requested!==null){
-        const {rows:[current]}=await c.query(`select * from ${name} where ${identity}=$1 for update`,[requested]);
+        const result=await c.query(`select * from ${name} where ${identity}=$1 for update`,[requested]);
+        current=result.rows[0];
         if(!current || (name!=='organizations' && current.org!==org) || (name==='users' && a.role!=='root' && current.role!=='user')) deny();
+      }
+      let revoke=false;
+      if(name==='users'){
+        if(input.role!=='user' && a.role!=='root') deny();
+        const kind=authKind.parse(input.auth_kind ?? current?.auth_kind ?? 'local');
+        input.auth_kind=kind;
+        if((input.role==='root' || current?.role==='root') && kind!=='local') throw new HttpError(400,'Glavni administrator koristi lokalnu prijavu.');
+        const address=String(input.email);
+        const schoolAddress=address.endsWith('@skolehr.xyz') || (demo && address.endsWith('@skolehr.test'));
+        if(kind==='ednevnik' && !schoolAddress) throw new HttpError(400,'Odaberite školsku WebmailHR adresu.');
+        if(kind==='ednevnik' && input.role!=='user') throw new HttpError(400,'Učenik mora imati ulogu korisnika.');
+        if(kind==='local'){
+          const allowed=input.role==='root' || (demo && address.endsWith('.test'));
+          if(!allowed && (!current || current.auth_kind!=='local' || input.password)) throw new HttpError(400,'Odaberite vrstu prijave za ovog korisnika.');
+          if(input.password) input.password=await hashPassword(String(input.password));
+          else if(!current?.password || current.auth_kind!=='local') throw new HttpError(400,'Unesite početnu lozinku.');
+          else delete input.password;
+        }else{
+          if(input.password) throw new HttpError(400,'Lozinka se postavlja prema vrsti prijave.');
+          if(kind==='staff' && current?.auth_kind==='staff') delete input.password;
+          else input.password=null;
+          input.recovery=null;
+        }
+        if(externalKind(kind)){
+          input.source_user_id=sourceId.parse(input.source_user_id ?? (current?.auth_kind===kind?current.source_user_id:undefined));
+          input.source_project=current?.auth_kind===kind && current.source_user_id===input.source_user_id
+            ?current.source_project:projectIdFor(kind);
+        }else{
+          input.source_user_id=null;
+          input.source_project=null;
+        }
+        revoke=!!current&&(current.auth_kind!==kind || current.source_project!==input.source_project ||
+          current.source_user_id!==input.source_user_id || current.email!==input.email ||
+          current.role!==input.role || current.active!==input.active || typeof input.password==='string');
       }
       const address=input.address || input.email;
       if(address && !(await c.query('select 1 from domains where org=$1 and name=$2',[org,addressing(String(address))])).rowCount) throw new HttpError(400,'Domena nije registrirana za ovu organizaciju.');
@@ -162,7 +213,10 @@ export function setupData(api:Router){
       const cols=Object.keys(input), vals=Object.values(input);
       if(requested!==null){
         await c.query(`update ${name} set ${cols.map((col,i)=>`${col}=$${i+1}`).join(',')} where ${identity}=$${vals.length+1}`,[...vals,requested]);
-        if(name==='users' && input.password) await c.query('delete from sessions where uid=$1',[requested]);
+        if(revoke){
+          await c.query('delete from sessions where uid=$1',[requested]);
+          await c.query('delete from resets where uid=$1',[requested]);
+        }
       }else{
         if(name!=='organizations'){cols.push('org');vals.push(org);}
         await c.query(`insert into ${name}(${cols.join(',')}) values(${vals.map((_,i)=>'$'+(i+1)).join(',')})`,vals);

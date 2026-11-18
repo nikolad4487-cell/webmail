@@ -10,7 +10,7 @@ compose=(docker compose -f compose.yaml -f compose.quota.yaml)
 accounts=.quota-demo/postfix-accounts.cf
 touch "$accounts" .quota-demo/dovecot-quotas.cf
 hash="$(openssl passwd -6 'LocalTestMail-2026')"
-for address in lena@formapoint.test info@formapoint.test ivan@skolehr.test mia@skolehr.test referada@skolehr.test petra@fzom.isvu.test referada@fzom.isvu.test narudzba@formapoint-orders.test promocije@formapoint.test postmaster@formapoint.test ana@kupci.test marko@partneri.test ivana@racuni.test tomislav@partneri.test petra@partneri.test lucija@kupci.test; do
+for address in lena@formapoint.test info@formapoint.test ivan@skolehr.test mia@skolehr.test referada@skolehr.test petra@fzom.isvu.test referada@fzom.isvu.test narudzba@formapoint-orders.test promocije@formapoint.test postmaster@formapoint.test ucenik@skolehr.test ana@kupci.test marko@partneri.test ivana@racuni.test tomislav@partneri.test petra@partneri.test lucija@kupci.test; do
   if ! awk -F '|' -v address="$address" '$1==address{found=1} END{exit !found}' "$accounts"; then
     printf '%s|{SHA512-CRYPT}%s\n' "$address" "$hash" >> "$accounts"
   fi
