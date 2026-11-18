@@ -1,7 +1,7 @@
 import {invalidLogin,staffSecret,verifyFormaPoint,verifyStudent} from './identity.js';
 import express, {type Request,type Response} from 'express';
 import {z, ZodError} from 'zod';
-import {db,digest,hashPassword,token,transaction,verifyPassword} from './db.js';
+import {checkLoginDatabase,db,digest,hashPassword,loginDatabaseIssue,token,transaction,verifyPassword,type LoginDatabaseIssue} from './db.js';
 import {addressing,append,archiveDraft,demo,folder,HttpError,imap,listing,message,mime,quotaFor,smtp,type Outgoing} from './mail.js';
 import {email,id,user,deny} from './http.js';
 import {setupData} from './workspace.js';
@@ -42,13 +42,25 @@ async function limit(key:string, max:number) {
   if(rows[0].count>max) throw new HttpError(429,'Previše pokušaja. Pokušajte ponovno za 15 minuta.');
 }
 api.get('/login-settings',(req,res)=>res.json({demo,adminSite:isAdminSite(req),adminUrl:adminOrigin,publicUrl:origin}));
+class DatabaseUnavailable extends HttpError {
+  constructor(public code:LoginDatabaseIssue){
+    super(503,{
+      DB_CONFIG:'Provjerite serversku postavku DATABASE_URL za WebmailHR.',
+      DB_SCHEMA:'Baza WebmailHR-a čeka migracije. Pokrenite npm run migrate na produkcijskoj bazi.',
+      DB_PERMISSION:'WebmailHR nema potrebne ovlasti za prijavu u PostgreSQL bazi.',
+      DB_CONNECTION:'WebmailHR trenutačno ne može uspostaviti vezu s PostgreSQL bazom.',
+    }[code]);
+  }
+}
 api.use((_req,_res,next)=>{
-  if(!process.env.DATABASE_URL?.trim()) throw new HttpError(503,'Poslužitelj nije povezan s bazom podataka.');
+  if(!process.env.DATABASE_URL?.trim()) throw new DatabaseUnavailable('DB_CONFIG');
   next();
 });
 api.get('/health',async (_req,res)=>{
-  try{await db.query('select 1');}
-  catch{throw new HttpError(503,'Veza s bazom podataka trenutačno nije dostupna.');}
+  let hasPermissions:boolean;
+  try{hasPermissions=await checkLoginDatabase();}
+  catch(error){throw new DatabaseUnavailable(loginDatabaseIssue(error) ?? 'DB_CONNECTION');}
+  if(!hasPermissions) throw new DatabaseUnavailable('DB_PERMISSION');
   res.json({ok:true,demo});
 });
 const localAccount = "(role='root' or ($2::boolean and right(email,5)='.test'))";
@@ -111,13 +123,21 @@ async function signIn(req:Request,res:Response,adminLogin=false){
   });
   res.cookie(cookie,key,{...cookieOptions,...(input.remember?{maxAge:lifetime}:{})}).json({ok:true});
 }
+async function startSession(req:Request,res:Response,adminLogin=false){
+  try{return await signIn(req,res,adminLogin);}
+  catch(error){
+    const issue=loginDatabaseIssue(error);
+    if(issue) throw new DatabaseUnavailable(issue);
+    throw error;
+  }
+}
 api.post('/login',(req,res)=>{
   if(isAdminSite(req)) return deny();
-  return signIn(req,res);
+  return startSession(req,res);
 });
 api.post('/auth/admin-login',(req,res)=>{
   if(adminOrigin && !isAdminSite(req)) return deny();
-  return signIn(req,res,true);
+  return startSession(req,res,true);
 });
 api.post('/recover',async (req,res)=>{
   if(adminOrigin && !isAdminSite(req)) return deny();
@@ -252,6 +272,7 @@ api.post('/mail/:box/send',async(req,res)=>{
 setupData(api);
 app.use('/api',(_req,res)=>res.status(404).json({error:'Radnja nije pronađena.'}));
 app.use((err:unknown,_req:express.Request,res:express.Response,_next:express.NextFunction)=>{
+  if(err instanceof DatabaseUnavailable) {res.status(err.status).json({error:err.message,code:err.code});return;}
   if(err instanceof HttpError) {res.status(err.status).json({error:err.message});return;}
   if(err instanceof ZodError){res.status(400).json({error:'Provjerite unesene podatke.',fields:err.issues.map(x=>x.path.join('.'))});return;}
   const code=(err as {code?:string}).code;

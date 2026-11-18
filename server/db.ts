@@ -3,6 +3,33 @@ import { createHash, randomBytes, scrypt, timingSafeEqual } from 'node:crypto';
 import { promisify } from 'node:util';
 
 export const db = new Pool({ connectionString: process.env.DATABASE_URL, connectionTimeoutMillis: 5000 });
+export type LoginDatabaseIssue='DB_CONFIG'|'DB_SCHEMA'|'DB_PERMISSION'|'DB_CONNECTION';
+
+export function loginDatabaseIssue(error:unknown):LoginDatabaseIssue|undefined {
+  if(!(error instanceof Error)) return;
+  const {code,message}=error as Error & {code?:string};
+  if(code && ['42P01','42703','3F000'].includes(code)) return 'DB_SCHEMA';
+  if(code && ['42501','25006'].includes(code)) return 'DB_PERMISSION';
+  if(code && ['ERR_INVALID_URL','28P01','28000','3D000'].includes(code)) return 'DB_CONFIG';
+  if(code?.startsWith('08') || (code && [
+    'ENOTFOUND','EAI_AGAIN','ENETUNREACH','EHOSTUNREACH','ECONNREFUSED','ECONNRESET','ETIMEDOUT',
+    'DEPTH_ZERO_SELF_SIGNED_CERT','SELF_SIGNED_CERT_IN_CHAIN','UNABLE_TO_VERIFY_LEAF_SIGNATURE','ERR_TLS_CERT_ALTNAME_INVALID',
+    '53300','57P01','57P02','57P03',
+  ].includes(code)) || /^(Connection terminated|timeout expired|SASL:)/i.test(message)) return 'DB_CONNECTION';
+}
+
+export async function checkLoginDatabase() {
+  // PostgreSQL resolves these tables, columns and read permissions without reading account data.
+  await db.query(`select u.id,u.auth_kind,u.password,u.active,u.email,u.role,u.source_project,u.source_user_id,u.source_email,
+    s.token,s.uid,s.expires,l.key,l.count,l.expires
+    from users u cross join sessions s cross join login_limits l limit 0`);
+  const {rows:[rights]}=await db.query(`select
+    has_table_privilege('sessions','INSERT') and
+    has_table_privilege('login_limits','INSERT') and
+    has_table_privilege('login_limits','UPDATE') and
+    has_table_privilege('login_limits','DELETE') as can_login`);
+  return rights.can_login===true;
+}
 export const token = () => randomBytes(32).toString('hex');
 export const digest = (value: string) => createHash('sha256').update(value).digest('hex');
 const derive = promisify(scrypt);

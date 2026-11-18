@@ -60,7 +60,17 @@ postavkama projekta postavite serverski `DATABASE_URL`, `APP_ORIGIN` i
 Na `https://admin.webmailhr.com/api/login-settings` očekuje se JSON s
 `adminSite: true`. Ako ta adresa vraća HTML ili platformsku stranicu 404,
 provjerite je li aktivna objava izgradila API funkciju i koristi li preusmjeravanja
-iz repozitorija. `/api/health` vraća 200 kad API uspješno provjeri PostgreSQL.
+iz repozitorija. [Provjera baze](https://admin.webmailhr.com/api/health) vraća 200 kad API može pristupiti
+tablicama za prijavu i ima potrebne ovlasti pisanja. Kod odgovora 503 postupak
+ovisi o polju `code`.
+
+| Kod | Postupak |
+| --- | --- |
+| `DB_CONFIG` | Provjerite produkcijski `DATABASE_URL` i pristupne podatke baze. Nakon izmjene varijable ponovno objavite projekt. |
+| `DB_CONNECTION` | Provjerite dostupnost hosta i porta te TLS. Ako koristite Supabase i izvršno okruženje ne može dosegnuti izravnu vezu na IPv6, koristite session pooler URL iz projekta. |
+| `DB_SCHEMA` | Pokrenite `npm run migrate` nad istom bazom koju koristi produkcija. |
+| `DB_PERMISSION` | Provjerite koristi li aplikacija PostgreSQL ulogu s potrebnim ovlastima pisanja u tablice za prijavu. |
+
 Konfiguracija administracije i provjera prijave slijede u idućem odjeljku.
 
 ## Glavni administrator
