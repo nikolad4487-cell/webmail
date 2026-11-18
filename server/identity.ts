@@ -1,6 +1,6 @@
 import {createHmac,randomInt} from 'node:crypto';
 import {z} from 'zod';
-import {demo,HttpError} from './mail';
+import {demo,HttpError} from './mail.js';
 
 export const authKind=z.enum(['local','staff','ednevnik','formapoint']);
 export type ExternalKind='ednevnik'|'formapoint';

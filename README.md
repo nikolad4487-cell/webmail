@@ -49,6 +49,20 @@ Testovi provjeravaju izolaciju škola, pristup referadi, zabranu tuđeg privitka
 
 SMTP s `secure:false` zahtijeva STARTTLS, IMAP s `secure:false` također zahtijeva STARTTLS. Certifikati se provjeravaju. Zajednički sandučić koristi odvojeni servisni pristup ograničen na taj sandučić. Dopuštenje aplikacije provjerava se prije IMAP-a i SMTP-a, a SMTP servis mora odbiti slanje s adresa izvan dodijeljenog identiteta i njegovih aliasa. Onemogućite automatsko kopiranje u Poslano na pružatelju ako je uključeno, jer WebmailHR nakon potvrđene predaje sprema jednu IMAP kopiju. Kod nepoznatog SMTP ishoda ili greške pri spremanju kopije provjerite zapis servisa prije ponovne predaje.
 
+### Objava na Vercelu
+
+`vercel.json` objavljuje Vite izlaz iz `dist` i usmjerava `/api/*` na Node
+funkciju `api/index.ts`. Funkcija koristi isti Express API kao `npm start`.
+Dodijelite `webmailhr.com` i `admin.webmailhr.com` istom projektu. U produkcijskim
+postavkama projekta postavite serverski `DATABASE_URL`, `APP_ORIGIN` i
+`ADMIN_ORIGIN`, primijenite migracije na ciljnu bazu i ponovno objavite projekt.
+
+Na `https://admin.webmailhr.com/api/login-settings` očekuje se JSON s
+`adminSite: true`. Ako ta adresa vraća HTML ili platformsku stranicu 404,
+provjerite je li aktivna objava izgradila API funkciju i koristi li preusmjeravanja
+iz repozitorija. `/api/health` vraća 200 kad API uspješno provjeri PostgreSQL.
+Konfiguracija administracije i provjera prijave slijede u idućem odjeljku.
+
 ## Glavni administrator
 
 Postavite `APP_ORIGIN=https://webmailhr.com` i `ADMIN_ORIGIN=https://admin.webmailhr.com`.

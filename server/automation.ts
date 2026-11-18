@@ -1,9 +1,9 @@
 import {createHmac,timingSafeEqual} from 'node:crypto';
 import {type Router,type Request} from 'express';
 import {z} from 'zod';
-import {db,digest,transaction} from './db';
-import {deny,email,text} from './http';
-import {HttpError,mime,smtp,type Outgoing} from './mail';
+import {db,digest,transaction} from './db.js';
+import {deny,email,text} from './http.js';
+import {HttpError,mime,smtp,type Outgoing} from './mail.js';
 
 const keys:z.infer<typeof keySchema>[]=JSON.parse(process.env.INTEGRATION_KEYS || '[]');
 const keySchema=z.object({hash:z.string().regex(/^[a-f0-9]{64}$/),address:email,kind:z.enum(['order','promotion']),consent:z.boolean().optional(),delivery:z.boolean().optional()});

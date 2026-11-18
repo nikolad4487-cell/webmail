@@ -2,7 +2,7 @@ import { Pool, type PoolClient } from 'pg';
 import { createHash, randomBytes, scrypt, timingSafeEqual } from 'node:crypto';
 import { promisify } from 'node:util';
 
-export const db = new Pool({ connectionString: process.env.DATABASE_URL });
+export const db = new Pool({ connectionString: process.env.DATABASE_URL, connectionTimeoutMillis: 5000 });
 export const token = () => randomBytes(32).toString('hex');
 export const digest = (value: string) => createHash('sha256').update(value).digest('hex');
 const derive = promisify(scrypt);

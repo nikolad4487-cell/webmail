@@ -10,6 +10,10 @@ import './style.css';
 function Brand(){return <span className="brand"><span className="brand-icon"><Mail size={22}/></span>Webmail<span>HR</span></span>}
 
 type LoginSettings={demo:boolean;adminSite:boolean;adminUrl:string;publicUrl:string};
+const fallbackSettings:LoginSettings={
+  demo:false,adminSite:location.hostname==='admin.webmailhr.com',
+  adminUrl:'https://admin.webmailhr.com',publicUrl:'https://webmailhr.com',
+};
 function Login({onLogin,settings}:{onLogin:()=>Promise<void>;settings:LoginSettings}){
   const reset=new URLSearchParams(location.search).get('reset');
   const [mode,setMode]=useState(reset?'reset':'login'),[visible,setVisible]=useState(false);
@@ -54,7 +58,7 @@ function Login({onLogin,settings}:{onLogin:()=>Promise<void>;settings:LoginSetti
 const navigation=[{key:'mail',label:'Pošta',path:'/',icon:Mail},{key:'calendar',label:'Kalendar',path:'/kalendar',icon:CalendarDays},{key:'contacts',label:'Kontakti',path:'/kontakti',icon:UsersRound},{key:'admin',label:'Administracija',path:'/admin',icon:Settings}];
 const getPage=(adminSite=false)=>navigation.slice(1).find(x=>location.pathname.startsWith(x.path))?.key||(adminSite?'admin':'mail');
 function App(){
-  const [session,setSession]=useState<Session|null>(null),[loading,setLoading]=useState(true),[settings,setSettings]=useState<LoginSettings>({demo:false,adminSite:false,adminUrl:'',publicUrl:''}),[page,setPage]=useState(()=>getPage()),[accountOpen,setAccountOpen]=useState(false),[recipient,setRecipient]=useState('');
+  const [session,setSession]=useState<Session|null>(null),[loading,setLoading]=useState(true),[settings,setSettings]=useState<LoginSettings>(fallbackSettings),[page,setPage]=useState(()=>getPage(fallbackSettings.adminSite)),[accountOpen,setAccountOpen]=useState(false),[recipient,setRecipient]=useState('');
   async function load(){setSession(await api<Session>('/me'));}
   useEffect(()=>{
     Promise.allSettled([api<LoginSettings>('/login-settings'),load()]).then(([result])=>{
