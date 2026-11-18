@@ -12,7 +12,7 @@
     "seed": "tsx scripts/demo.ts",
     "bootstrap": "tsx scripts/bootstrap.ts",
     "admin:password": "tsx scripts/admin-password.ts",
-    "build:vercel": "npm run build && tsx scripts/vercel-migrate.ts"
+    "build:vercel": "npm run build && tsx scripts/vercel-migrate.ts && tsx scripts/vercel-admin.ts"
   },
   "repository": {
     "type": "git",

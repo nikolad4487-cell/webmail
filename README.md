@@ -103,6 +103,20 @@ Migracije i naredbe za račun trebaju serverski `DATABASE_URL` za istu bazu koju
 - Administratorska lozinka mora imati najmanje osam znakova. Vrijednost proslijedite samo procesu kojem je potrebna i uklonite privremene varijable nakon izvršavanja. U bazi se čuva scrypt hash s nasumičnom soli.
 - Ako želite omogućiti oporavak e-poštom, potrebno je prethodno potvrditi adresu oporavka (`BOOTSTRAP_RECOVERY` za novi račun) i postaviti `RECOVERY_SENDER`. Poveznica za oporavak koristi administratorsku domenu.
 
+### Jednokratno postavljanje administratora iz Vercela
+
+Ako lokalna mreža nema pristup PostgreSQL-u, u produkcijskim varijablama
+postojećeg WebmailHR projekta postavite `WEBMAIL_ADMIN_SETUP=1` i novu
+serversku tajnu `ADMIN_PASSWORD`. Ova objava stvara `admin@webmailhr.com` ako
+glavni administrator ne postoji. Ako je na toj adresi već aktivan lokalni
+glavni administrator, postavlja novu lozinku i opoziva sesije. Ako postoji
+drugi glavni administrator ili je adresa zauzeta običnim računom, objava
+prekida postupak i zadržava postojeće ovlasti.
+
+Ponovno objavite odgovarajući produkcijski commit bez build cachea. Nakon
+poruke o uspjehu u Build Logs uklonite `WEBMAIL_ADMIN_SETUP` i `ADMIN_PASSWORD`
+te provjerite prijavu na administratorskoj domeni.
+
 ## Prijava i povezivanje s izvornim računima
 
 Na `https://webmailhr.com/` jedan obrazac prima korisničko ime ili e-mail adresu. Glavni administrator koristi postojeći lokalni račun na `https://admin.webmailhr.com/`. Postojeći lokalni demo računi s adresama `.test` ostaju dostupni u demo okruženju.
@@ -112,6 +126,20 @@ Na `https://webmailhr.com/` jedan obrazac prima korisničko ime ili e-mail adres
 - **Školski djelatnici.** Koriste punu WebmailHR adresu i osam znamenaka. U administraciji odaberite **Generiraj / resetiraj lozinku**. Lozinka se prikazuje jednom, a reset opoziva postojeće sesije. Postavite serverski `STAFF_PIN_PEPPER` na nasumičnu tajnu od najmanje 32 znaka. Ako je promijenite, izdajte nove lozinke.
 
 U administraciji odaberite vrstu računa prije povezivanja i dodijelite potrebne sandučiće. Aplikacija čuva par referenca projekta + izvorni Auth ID. Izvorni sustavi provjeravaju lozinku pri svakoj novoj prijavi. WebmailHR ne pohranjuje njihove lozinke ni tokene i sam provjerava dodjele za svako otvaranje sandučića ili privitka.
+
+### Dodjela učeničkog sandučića
+
+Ako WebmailHR potvrdi prijavu kroz e-Dnevnik i zatraži dodjelu sandučića,
+provjerite postoje li u istoj organizaciji:
+
+1. Aktivan zapis u **Korisnici** vrste **Učenik · e-Dnevnik**, s učenikovom
+   adresom `@skolehr.xyz` i vrijednošću **Stabilni ID korisnika** koja odgovara
+   Auth UUID-u u projektu e-Dnevnika.
+2. Aktivan osobni zapis pod **Sandučići** s istom adresom. U tom retku otvorite
+   **Ovlasti i aliasi**, odaberite učenika i kliknite **Spremi ovlasti**.
+
+Stvarni sandučić mora postojati i na poštanskom poslužitelju. Za prikaz pošte
+WebmailHR-u je potrebna njegova IMAP konfiguracija u `MAIL_ROUTES`.
 
 ## Domene i DNS
 
