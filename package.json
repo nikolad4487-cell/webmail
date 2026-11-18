@@ -12,7 +12,8 @@
     "seed": "tsx scripts/demo.ts",
     "bootstrap": "tsx scripts/bootstrap.ts",
     "admin:password": "tsx scripts/admin-password.ts",
-    "build:vercel": "npm run build && tsx scripts/vercel-migrate.ts && tsx scripts/vercel-admin.ts"
+    "build:vercel": "npm run build && tsx scripts/vercel-migrate.ts && tsx scripts/vercel-admin.ts && tsx scripts/vercel-directory.ts",
+    "directory:sync": "tsx scripts/sync-directory.ts"
   },
   "repository": {
     "type": "git",

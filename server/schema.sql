@@ -33,3 +33,27 @@ end $$;
 alter table users add column if not exists source_email text
   check (source_email is null or (auth_kind='formapoint' and source_email=lower(source_email)));
 create unique index if not exists users_source_email on users(source_email) where source_email is not null;
+
+create table if not exists directory_identities(
+  project text not null,
+  subject text not null,
+  uid int not null unique references users on delete cascade,
+  primary key(project,subject)
+);
+create table if not exists directory_schools(
+  project text not null,
+  subject text not null,
+  school int not null unique references schools on delete cascade,
+  primary key(project,subject)
+);
+create table if not exists directory_school_memberships(
+  uid int not null references directory_identities(uid) on delete cascade,
+  school int not null references schools on delete cascade,
+  primary key(uid,school)
+);
+create table if not exists directory_mailboxes(
+  box int primary key references mailboxes on delete cascade,
+  uid int not null unique references directory_identities(uid) on delete cascade,
+  encrypted_password text not null,
+  ready boolean not null default false
+);

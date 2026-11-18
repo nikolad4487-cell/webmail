@@ -65,6 +65,22 @@ export function Admin({session}:{session:Session}){
     try{setPin((await api<{pin:string}>('/admin/users/'+row.id+'/pin','POST')).pin);}
     catch(e){setError(toError(e));}finally{setRotating(false);}
   }
+  async function downloadInitialPins(){
+    if(!window.confirm('Generirati početne PIN-ove za do 50 novih djelatnika? Datoteka ih sadrži u čitljivom obliku.'))return;
+    setRotating(true);setError('');
+    try{
+      const {generated}=await api<{generated:{email:string;pin:string}[]}>('/admin/staff/initial-pins','POST',{org:filter?Number(filter):null});
+      if(!generated.length){
+        setError('U odabranoj organizaciji nema djelatnika bez početnog PIN-a.');
+        return;
+      }
+      const url=URL.createObjectURL(new Blob([JSON.stringify(generated,null,2)],{type:'application/json'}));
+      const link=document.createElement('a');
+      link.href=url;link.download='webmailhr-pocetni-pinovi.json';
+      link.click();
+      setTimeout(()=>URL.revokeObjectURL(url),1000);
+    }catch(e){setError(toError(e));}finally{setRotating(false);}
+  }
   async function loadStorage(){
     setStorageBusy(true);setError('');
     try{setStorage(await api<Storage>('/admin/storage'));}catch(e){setError(toError(e));}finally{setStorageBusy(false);}
@@ -85,7 +101,7 @@ export function Admin({session}:{session:Session}){
     return field.options?.find(x=>x[0]===value)?.[1]||String(value??'—');
   };
   return <main className="workspace-layout"><aside className="sidebar"><p className="section-label">Administracija</p><nav className="folder-list" aria-label="Administracija">{Object.entries(sections).map(([key,{label,icon:Icon}])=><button className={section===key?'active':''} key={key} onClick={()=>open(key as Section)}><Icon size={18}/>{label}</button>)}</nav></aside><section className="workspace-content">
-    <div className="page-heading"><h1>{config.label}</h1>{section!=='logs'&&(section!=='organizations'||root)&&<button className="primary" onClick={()=>begin()}><Plus size={18}/> {section==='mailboxes'?'Novi sandučić':section==='senders'?'Dodaj pošiljatelja':'Dodaj zapis'}</button>}</div>
+    <div className="page-heading"><h1>{config.label}</h1>{section==='users'&&root&&<button className="secondary" disabled={rotating} onClick={downloadInitialPins}><KeyRound size={16}/> Početni PIN-ovi djelatnika</button>}{section!=='logs'&&(section!=='organizations'||root)&&<button className="primary" onClick={()=>begin()}><Plus size={18}/> {section==='mailboxes'?'Novi sandučić':section==='senders'?'Dodaj pošiljatelja':'Dodaj zapis'}</button>}</div>
     <div className="filters">{section!=='organizations'&&section!=='logs'&&root&&<select aria-label="Organizacija" value={filter} onChange={e=>setFilter(e.target.value)}><option value="">Sve organizacije</option>{orgs.map(x=><option key={String(x.id)} value={String(x.id)}>{x.name}</option>)}</select>}<label className="search wide-search"><Search size={18}/><input aria-label="Pretraži zapise" placeholder="Pretraži zapise…" value={search} onChange={e=>setSearch(e.target.value)}/></label></div>
     {section==='mailboxes'&&<div className="storage-admin"><p className="muted">Stvarna kvota i usmjeravanje aliasa ovise o poštanskom poslužitelju.</p><button className="secondary" disabled={storageBusy} onClick={loadStorage}>{storageBusy?'Dohvaćanje…':'Osvježi stanje pohrane'}</button></div>}
     {section==='mailboxes'&&storage&&<p className="storage-summary">Kapacitet: {storageSize(storage.capacity)} · Prijavljena potrošnja: {storageSize(storage.boxes.reduce((sum,x)=>sum+(x.used??0),0))} · Ciljane kvote: {storage.boxes.reduce((sum,x)=>sum+x.target,0)} GiB · Izmjerena kvota: {storage.boxes.filter(x=>x.limit!=null).length}/{storage.boxes.length} sandučića</p>}

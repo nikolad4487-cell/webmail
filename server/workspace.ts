@@ -1,9 +1,15 @@
 import {authKind,externalKind,generatePin,projectIdFor,sourceId,staffSecret} from './identity.js';
 import {type Router} from 'express';
+import type {PoolClient} from 'pg';
 import {z} from 'zod';
 import {db,digest,hashPassword,transaction,verifyPassword} from './db.js';
 import {addressing,applyMailcowQuota,demo,HttpError,quotaFor} from './mail.js';
 import {deny,email,id,text,user} from './http.js';
+
+async function directoryInstalled(client:PoolClient){
+  const {rows:[state]}=await client.query("select to_regclass('directory_mailboxes') is not null as installed");
+  return state.installed===true;
+}
 
 const instant=z.string().datetime({offset:true});
 const eventInput=z.object({title:text,starts:instant,ends:instant,attendees:z.array(email).max(40),box:id.nullable()}).refine(x=>Date.parse(x.ends)>Date.parse(x.starts));
@@ -111,6 +117,10 @@ export function setupData(api:Router){
       const {rows:[m]}=await c.query('select org from mailboxes where id=$1 for update',[box]);
       if(!m || (a.role!=='root' && m.org!==a.org)) deny();
       if(x.kind==='grant'){
+        if(!x.remove && await directoryInstalled(c)){
+          const {rows:[owner]}=await c.query('select uid from directory_mailboxes where box=$1',[box]);
+          if(owner && owner.uid!==x.uid)throw new HttpError(409,'Osobni sandučić može se dodijeliti samo vlasniku.');
+        }
         if(!(await c.query('select 1 from users where id=$1 and org=$2',[x.uid,m.org])).rowCount) deny();
         if(x.remove) await c.query('delete from grants where uid=$1 and box=$2',[x.uid,box]);
         else await c.query('insert into grants values($1,$2,$3,$4) on conflict(uid,box) do update set can_send=excluded.can_send,can_calendar=excluded.can_calendar',[x.uid,box,x.can_send,x.can_calendar]);
@@ -149,6 +159,26 @@ export function setupData(api:Router){
     });
     res.json({pin});
   });
+  api.post('/admin/staff/initial-pins',async(req,res)=>{
+    const a=user(req);
+    if(a.role!=='root') return deny();
+    const {org}=z.object({org:id.nullable()}).parse(req.body);
+    const generated=await transaction(async client=>{
+      if(!await directoryInstalled(client))throw new HttpError(503,'Skupna dodjela čeka migraciju baze.');
+      const {rows}=await client.query(`select u.id,u.email from users u join directory_mailboxes d on d.uid=u.id
+        join mailboxes m on m.id=d.box where u.auth_kind='staff' and u.active and u.password is null and d.ready and m.active
+        and ($1::int is null or u.org=$1) order by u.id limit 50 for update of u skip locked`,[org]);
+      const result=[];
+      for(const row of rows){
+        const pin=generatePin();
+        await client.query('update users set password=$2 where id=$1',[row.id,await hashPassword(staffSecret(pin))]);
+        result.push({email:row.email,pin});
+      }
+      if(result.length)await client.query("insert into audits(uid,action,target) values($1,'staff.pin.batch',$2)",[a.id,String(result.length)]);
+      return result;
+    });
+    res.json({generated});
+  });
   api.get('/admin/:table',async(req,res)=>{
     const a=user(req), name=tableName.parse(req.params.table), t=tables[name];
     res.json((await db.query(`select ${t.columns} from ${name} where ($1::int is null or ${t.scope}=$1) order by 1`,[a.role==='root'?null:a.org])).rows);
@@ -167,6 +197,16 @@ export function setupData(api:Router){
         const result=await c.query(`select * from ${name} where ${identity}=$1 for update`,[requested]);
         current=result.rows[0];
         if(!current || (name!=='organizations' && current.org!==org) || (name==='users' && a.role!=='root' && current.role!=='user')) deny();
+        if(name==='mailboxes' && (current.address!==input.address || current.shared!==input.shared) && await directoryInstalled(c)){
+          const managed=await c.query('select 1 from directory_mailboxes where box=$1',[requested]);
+          if(managed.rowCount)throw new HttpError(409,'Adresu i vrstu sinkroniziranog osobnog sandučića nije moguće promijeniti.');
+        }
+        if(name==='users' && (current.email!==input.email || (input.auth_kind && current.auth_kind!==input.auth_kind) ||
+            (input.source_user_id!=null && current.source_user_id!==input.source_user_id) ||
+            (input.source_email!=null && current.source_email!==input.source_email)) && await directoryInstalled(c)){
+          const managed=await c.query('select 1 from directory_identities where uid=$1',[requested]);
+          if(managed.rowCount)throw new HttpError(409,'Identitet sinkroniziranog korisnika mijenja se u izvornom projektu.');
+        }
       }
       let revoke=false;
       if(name==='users'){

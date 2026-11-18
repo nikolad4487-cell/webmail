@@ -127,6 +127,49 @@ Na `https://webmailhr.com/` jedan obrazac prima korisničko ime ili e-mail adres
 
 U administraciji odaberite vrstu računa prije povezivanja i dodijelite potrebne sandučiće. Aplikacija čuva par referenca projekta + izvorni Auth ID. Izvorni sustavi provjeravaju lozinku pri svakoj novoj prijavi. WebmailHR ne pohranjuje njihove lozinke ni tokene i sam provjerava dodjele za svako otvaranje sandučića ili privitka.
 
+### Skupna sinkronizacija i osobni sandučići
+
+`npm run directory:sync -- ednevnik` i `npm run directory:sync -- formapoint`
+prikazuju broj prihvatljivih računa. Dodatak `--apply` povezuje račune prema
+identifikatoru izvornog projekta i Supabase Auth UUID-u, stvara osobne sandučiće
+na Mailcowu i dodjeljuje ih njihovim vlasnicima. Sinkronizacija ne mijenja
+postojeće zajedničke sandučiće niti preuzima adresu s postojećim vlasnikom.
+Ponovni poziv obrađuje i nedovršene zahtjeve. Objavu sandučića u WebmailHR-u
+odgađa do potvrde Mailcowa.
+
+| Izvor | Pravila |
+| --- | --- |
+| e-Dnevnik | Potvrđeni računi s aktivnim školskim članstvom. Učenici i djelatnici dobivaju odvojene vrste lokalnih računa. Sva aktivna članstva spremaju se uz primarnu školu. Adrese školske domene `eskole.me` mapiraju se u `skolehr.xyz`. |
+| FormaPoint | Potvrđeni Auth računi u konfiguriranom projektu, uključujući kupce. Računi bez adrese u ciljnoj domeni dobivaju adresu sa stabilnim nastavkom. Prijava ostaje preko izvorne adrese. |
+
+Izvori trebaju postojeće `*_SUPABASE_PROJECT_ID` i `*_SUPABASE_URL` te zasebni
+serverski ključ `EDNEVNIK_DIRECTORY_KEY` odnosno `FORMAPOINT_DIRECTORY_KEY`
+s pravom čitanja Auth imenika. e-Dnevnik ključ mora čitati i `user_profiles`,
+`user_school_roles` i `schools`. U Supabaseu je to uobičajeno serverski
+service-role ključ. Držite ih samo u okruženju radnika ili privremeno u Vercel
+Production postavkama. Organizacije i domene zadane su u `.env.example`.
+Domene moraju biti pripremljene na Mailcowu. Potrebni su `MAILCOW_URL`,
+`MAILCOW_API_KEY`, `MAILCOW_MAIL_HOST` s IMAPS 993 i SMTPS 465 te
+`MAILBOX_ENCRYPTION_KEY` od 64 heksadecimalna znaka (npr. `openssl rand -hex 32`).
+Poštanski ključevi generiraju se zasebno od prijavnih lozinki i spremaju
+šifrirani. Ključ za dešifriranje treba biti jednak u radniku i API-ju.
+
+Primijenite migracije prije prve primjene. Pokretanje ponavljajte na radniku
+koji ima pristup produkcijskom PostgreSQL-u i poštanskom poslužitelju. Za
+jednokratnu primjenu putem Vercela postavite `WEBMAIL_DIRECTORY_SYNC` na
+`ednevnik`, `formapoint` ili `both` samo u **Production**, ponovno objavite
+odgovarajući commit i uklonite privremenu varijablu nakon obrade. Za veće
+imenike koristite radnika zbog ograničenog vremena Vercel izgradnje.
+Odsutnost korisnika u jednom učitavanju sama ne uklanja postojeći račun,
+članstvo ili poštu. Pri odlasku djelatnika deaktivirajte njegov WebmailHR
+račun prema pravilima ustanove.
+
+Novi djelatnici trebaju WebmailHR PIN. Glavni administrator u **Korisnici**
+može po organizaciji skupno preuzeti do 50 početnih PIN-ova izdanih samo za
+račune bez lozinke. Datoteka ih sadrži u čitljivom obliku. Podijelite ih
+pojedinačno pouzdanim kanalom i uklonite datoteku kad završite. Postojeće
+lozinke ostaju aktivne.
+
 ### Dodjela učeničkog sandučića
 
 Ako WebmailHR potvrdi prijavu kroz e-Dnevnik i zatraži dodjelu sandučića,

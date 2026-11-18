@@ -3,6 +3,7 @@ import { ImapFlow, type SearchObject } from 'imapflow';
 import nodemailer from 'nodemailer';
 import { simpleParser } from 'mailparser';
 import { db } from './db.js';
+import {openMailboxPassword} from './mailbox-secrets.js';
 
 export const demo = process.env.DEMO_MODE === '1' && process.env.NODE_ENV !== 'production';
 const demoTls=demo && process.env.DEMO_TLS==='1';
@@ -21,8 +22,16 @@ export async function endpoint(address: string, protocol: 'imap' | 'smtp') {
     return {host:'127.0.0.1',port:protocol === 'imap' ? (demoTls?3993:3143) : (demoTls?3465:3025),user:address,password:'LocalTestMail-2026',secure:demoTls};
   }
   const config = routes[address]?.[protocol];
-  if (!config) throw new HttpError(503, 'Poštanski servis nije konfiguriran za ovu adresu.');
-  return config;
+  if (config) return config;
+  if(process.env.MAILCOW_MAIL_HOST){
+    const {rows:[managed]}=await db.query(`select d.encrypted_password from directory_mailboxes d
+      join mailboxes m on m.id=d.box where m.address=$1 and m.active and not m.shared and d.ready`,[address]);
+    if(managed){
+      return {host:process.env.MAILCOW_MAIL_HOST,port:protocol==='imap'?993:465,user:address,
+        password:openMailboxPassword(address,managed.encrypted_password),secure:true};
+    }
+  }
+  throw new HttpError(503, 'Poštanski servis nije konfiguriran za ovu adresu.');
 }
 export async function imap<T>(address: string, callback: (client: ImapFlow) => Promise<T>) {
   const {host,port,user,password,secure=true} = await endpoint(address,'imap');
