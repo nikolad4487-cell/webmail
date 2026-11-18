@@ -13,7 +13,7 @@ const tables={
   organizations:{columns:'id,name',scope:'id',schema:z.object({name:text})},
   schools:{columns:'id,org,name',scope:'org',schema:z.object({name:text})},
   domains:{columns:'name,org,inbound,outbound',scope:'org',schema:z.object({name:z.string().toLowerCase().regex(/^(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z0-9-]+$/).max(253),inbound:z.boolean(),outbound:z.boolean()})},
-  users:{columns:'id,org,school,name,email,role,active,recovery,auth_kind,source_project,source_user_id',scope:'org',schema:z.object({name:text,email,school:id.nullable(),role:z.enum(['root','admin','user']),active:z.boolean(),recovery:email.nullable(),auth_kind:authKind.optional(),source_user_id:sourceId.nullable().optional(),password:z.string().min(12).max(512).optional()})},
+  users:{columns:'id,org,school,name,email,role,active,recovery,auth_kind,source_project,source_user_id,source_username',scope:'org',schema:z.object({name:text,email,school:id.nullable(),role:z.enum(['root','admin','user']),active:z.boolean(),recovery:email.nullable(),auth_kind:authKind.optional(),source_user_id:sourceId.nullable().optional(),source_username:z.string().trim().min(1).max(254).nullable().optional(),password:z.string().min(12).max(512).optional()})},
   mailboxes:{columns:'id,org,address,label,shared,active,target_quota_gb',scope:'org',schema:z.object({address:email,label:text,shared:z.boolean(),active:z.boolean(),target_quota_gb:z.number().int().min(1).max(10000)})},
   senders:{columns:'id,org,address,reply_to,kind,active',scope:'org',schema:z.object({address:email,reply_to:email,kind:z.enum(['order','promotion']),active:z.boolean()})},
 };
@@ -143,7 +143,7 @@ export function setupData(api:Router){
       await c.query('update users set password=$2,recovery=null where id=$1',[uid,await hashPassword(secret)]);
       await c.query('delete from sessions where uid=$1',[uid]);
       await c.query('delete from resets where uid=$1',[uid]);
-      await c.query('delete from login_limits where key=$1',[digest('login:staff:'+account.email)]);
+      await c.query('delete from login_limits where key=$1',[digest('login:'+account.email)]);
       await c.query('insert into audits(uid,action,target) values($1,$2,$3)',[a.id,'staff.pin.rotate',String(uid)]);
       return value;
     });
@@ -192,14 +192,17 @@ export function setupData(api:Router){
         }
         if(externalKind(kind)){
           input.source_user_id=sourceId.parse(input.source_user_id ?? (current?.auth_kind===kind?current.source_user_id:undefined));
-          input.source_project=current?.auth_kind===kind && current.source_user_id===input.source_user_id
-            ?current.source_project:projectIdFor(kind);
+          const sameIdentity=current?.auth_kind===kind && current.source_user_id===input.source_user_id;
+          input.source_username=input.source_username ?? (sameIdentity?current.source_username:null);
+          if(!sameIdentity && !input.source_username) throw new HttpError(400,'Unesite korisničko ime iz izvornog sustava.');
+          input.source_project=sameIdentity?current.source_project:projectIdFor(kind);
         }else{
           input.source_user_id=null;
           input.source_project=null;
+          input.source_username=null;
         }
         revoke=!!current&&(current.auth_kind!==kind || current.source_project!==input.source_project ||
-          current.source_user_id!==input.source_user_id || current.email!==input.email ||
+          current.source_user_id!==input.source_user_id || current.source_username!==input.source_username || current.email!==input.email ||
           current.role!==input.role || current.active!==input.active || typeof input.password==='string');
       }
       const address=input.address || input.email;

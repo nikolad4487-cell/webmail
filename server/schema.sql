@@ -21,6 +21,8 @@ alter table users add column if not exists auth_kind text not null default 'loca
   check (auth_kind in ('local','staff','ednevnik','formapoint'));
 alter table users add column if not exists source_project text;
 alter table users add column if not exists source_user_id text;
+alter table users add column if not exists source_username text;
+create index if not exists users_source_username on users(lower(source_username)) where source_username is not null;
 create unique index if not exists users_source_identity on users(source_project,source_user_id);
 do $$ begin
   if not exists (select 1 from pg_constraint where conrelid='users'::regclass and conname='users_auth_identity') then
