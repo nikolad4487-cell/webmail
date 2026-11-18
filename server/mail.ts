@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { ImapFlow, type SearchObject } from 'imapflow';
 import nodemailer from 'nodemailer';
 import { simpleParser } from 'mailparser';
-import { db } from './db';
+import { db } from './db.js';
 
 export const demo = process.env.DEMO_MODE === '1' && process.env.NODE_ENV !== 'production';
 const demoTls=demo && process.env.DEMO_TLS==='1';

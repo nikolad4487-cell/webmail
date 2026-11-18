@@ -1,7 +1,7 @@
 import express from 'express';
 import {createServer as createHttpServer} from 'node:http';
 import {resolve} from 'node:path';
-import app from './app';
+import app from './app.js';
 
 const server=createHttpServer(app);
 if(process.env.NODE_ENV==='production'){

@@ -1,9 +1,9 @@
-import {authKind,externalKind,generatePin,projectIdFor,sourceId,staffSecret} from './identity';
+import {authKind,externalKind,generatePin,projectIdFor,sourceId,staffSecret} from './identity.js';
 import {type Router} from 'express';
 import {z} from 'zod';
-import {db,digest,hashPassword,transaction,verifyPassword} from './db';
-import {addressing,applyMailcowQuota,demo,HttpError,quotaFor} from './mail';
-import {deny,email,id,text,user} from './http';
+import {db,digest,hashPassword,transaction,verifyPassword} from './db.js';
+import {addressing,applyMailcowQuota,demo,HttpError,quotaFor} from './mail.js';
+import {deny,email,id,text,user} from './http.js';
 
 const instant=z.string().datetime({offset:true});
 const eventInput=z.object({title:text,starts:instant,ends:instant,attendees:z.array(email).max(40),box:id.nullable()}).refine(x=>Date.parse(x.ends)>Date.parse(x.starts));

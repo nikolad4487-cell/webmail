@@ -1,11 +1,11 @@
-import {invalidLogin,staffSecret,verifyFormaPoint,verifyStudent} from './identity';
+import {invalidLogin,staffSecret,verifyFormaPoint,verifyStudent} from './identity.js';
 import express, {type Request,type Response} from 'express';
 import {z, ZodError} from 'zod';
-import {db,digest,hashPassword,token,transaction,verifyPassword} from './db';
-import {addressing,append,archiveDraft,demo,folder,HttpError,imap,listing,message,mime,quotaFor,smtp,type Outgoing} from './mail';
-import {email,id,user,deny} from './http';
-import {setupData} from './workspace';
-import {setupAutomation} from './automation';
+import {db,digest,hashPassword,token,transaction,verifyPassword} from './db.js';
+import {addressing,append,archiveDraft,demo,folder,HttpError,imap,listing,message,mime,quotaFor,smtp,type Outgoing} from './mail.js';
+import {email,id,user,deny} from './http.js';
+import {setupData} from './workspace.js';
+import {setupAutomation} from './automation.js';
 
 const app=express(), api=express.Router(), production=process.env.NODE_ENV==='production';
 const origin=process.env.APP_ORIGIN || (production?'https://webmailhr.com':'');
