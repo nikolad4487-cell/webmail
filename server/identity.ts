@@ -48,7 +48,7 @@ export const projectIdFor=(kind:ExternalKind)=>project(kind).projectId;
 export async function verifyStudent(username:string,password:string){
   const config=project('ednevnik');
   if(!config.loginUrl || !config.loginToken) throw unavailable();
-  const result=await request(safeUrl(config.loginUrl),{username,password},{Authorization:'Bearer '+config.loginToken},[401]);
+  const result=await request(safeUrl(config.loginUrl),{username,password},{Authorization:'Bearer '+config.loginToken},[401,403]);
   const parsed=sourceId.safeParse((result as {user_id?:unknown}|null)?.user_id);
   if(!parsed.success) throw unavailable();
   return {projectId:config.projectId,userId:parsed.data};
