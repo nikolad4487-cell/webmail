@@ -5,7 +5,6 @@ import {api,initials,toError,type Session} from './api';
 import {Mailbox} from './mailbox';
 import {Calendar,Contacts} from './organizer';
 import {Admin} from './admin';
-import {accountKinds,usesUsername,type AccountKind} from './account-kinds';
 import './style.css';
 
 function Brand(){return <span className="brand"><span className="brand-icon"><Mail size={22}/></span>Webmail<span>HR</span></span>}
@@ -13,8 +12,7 @@ function Brand(){return <span className="brand"><span className="brand-icon"><Ma
 function Login({onLogin,demo}:{onLogin:()=>Promise<void>;demo:boolean}){
   const reset=new URLSearchParams(location.search).get('reset');
   const [mode,setMode]=useState(reset?'reset':'login'),[visible,setVisible]=useState(false);
-  const [kind,setKind]=useState<AccountKind>('staff');
-  const username=usesUsername(kind);
+  const adminLogin=location.pathname==='/admin/prijava' || !!reset;
   const [error,setError]=useState(''),[notice,setNotice]=useState(''),[busy,setBusy]=useState(false);
   async function submit(event:FormEvent<HTMLFormElement>){
     event.preventDefault();
@@ -22,36 +20,32 @@ function Login({onLogin,demo}:{onLogin:()=>Promise<void>;demo:boolean}){
     setError('');setBusy(true);
     try{
       if(mode==='login'){
-        await api('/login','POST',{kind,...(username?{username:input.get('username')}:{email:input.get('email')}),password:input.get('password'),remember:input.has('remember')});
+        await api(adminLogin?'/auth/admin-login':'/login','POST',{identifier:input.get('identifier'),password:input.get('password'),remember:input.has('remember')});
         await onLogin();
       }else if(mode==='recover'){
         await api('/recover','POST',{email:input.get('email')});
         setNotice('Ako postoji potvrđena adresa za oporavak, primit ćete poveznicu.');
       }else{
         await api('/reset','POST',{key:reset,password:input.get('password')});
-        history.replaceState(null,'','/');setMode('login');setKind('local');setNotice('Lozinka je promijenjena. Sada se možete prijaviti.');
+        history.replaceState(null,'','/admin/prijava');setMode('login');setNotice('Lozinka je promijenjena. Sada se možete prijaviti.');
       }
     }catch(e){setError(toError(e));}finally{setBusy(false);}
   }
   return <div className="login-page"><div className="login-shell"><Brand/><section className="login-card">
     <div className="login-symbol"><ShieldCheck size={24}/></div>
-    <h1>{mode==='login'?'Prijava':mode==='recover'?'Oporavak lozinke':'Nova lozinka'}</h1>
+    <h1>{mode==='login'?(adminLogin?'Prijava administratora':'Prijava'):mode==='recover'?'Oporavak lozinke':'Nova lozinka'}</h1>
     <p className="muted">{mode==='login'?'Pristupite svojim sandučićima i kalendaru.':mode==='recover'?'Unesite adresu svojeg računa.':'Odaberite lozinku od najmanje 12 znakova.'}</p>
     <form onSubmit={submit}>
-      {mode==='login'&&<label>Vrsta računa<select value={kind} onChange={e=>{setKind(e.target.value as AccountKind);setVisible(false);setError('');setNotice('');}}>
-        {[...accountKinds.slice(1),accountKinds[0]].map(([value,label])=><option key={value} value={value}>{label}</option>)}
-      </select></label>}
-      {mode!=='reset'&&(mode==='login'&&username
-        ? <label>Korisničko ime<input key={kind} name="username" autoComplete="username" maxLength={254} required/></label>
-        : <label>E-mail adresa<input key={kind} type="email" name="email" placeholder="ime.prezime@skolehr.xyz" autoComplete="username" required/></label>)}
-      {mode!=='recover'&&<label>{mode==='reset'?'Nova lozinka':'Lozinka'}<span className="password"><input key={mode+kind} type={visible?'text':'password'} name="password" placeholder="Unesite lozinku" autoComplete={mode==='reset'?'new-password':'current-password'} inputMode={mode==='login'&&kind==='staff'?'numeric':undefined} pattern={mode==='login'&&kind==='staff'?'[0-9]{8}':undefined} maxLength={mode==='login'&&kind==='staff'?8:512} minLength={mode==='reset'?12:1} required/><button type="button" className="icon ghost" aria-label={visible?'Sakrij lozinku':'Prikaži lozinku'} onClick={()=>setVisible(!visible)}>{visible?<EyeOff size={18}/>:<Eye size={18}/>}</button></span></label>}
-      {mode==='login'&&<div className="login-options"><label className="check"><input type="checkbox" name="remember"/> Zapamti me</label>{kind==='local'&&<button type="button" className="link" onClick={()=>{setMode('recover');setError('');setNotice('');}}>Zaboravljena lozinka?</button>}</div>}
-      {mode==='login'&&kind==='staff'&&<small>Osmeroznamenkastu lozinku izdaje administrator WebmailHR-a.</small>}
+      {mode==='login'&&<label>{adminLogin?'E-mail adresa':'Korisničko ime ili e-mail adresa'}<input type={adminLogin?'email':'text'} name="identifier" autoComplete="username" maxLength={254} required/></label>}
+      {mode==='recover'&&<label>E-mail adresa<input type="email" name="email" autoComplete="username" required/></label>}
+      {mode!=='recover'&&<label>{mode==='reset'?'Nova lozinka':'Lozinka'}<span className="password"><input key={mode} type={visible?'text':'password'} name="password" placeholder="Unesite lozinku" autoComplete={mode==='reset'?'new-password':'current-password'} maxLength={512} minLength={mode==='reset'?12:1} required/><button type="button" className="icon ghost" aria-label={visible?'Sakrij lozinku':'Prikaži lozinku'} onClick={()=>setVisible(!visible)}>{visible?<EyeOff size={18}/>:<Eye size={18}/>}</button></span></label>}
+      {mode==='login'&&<div className="login-options"><label className="check"><input type="checkbox" name="remember"/> Zapamti me</label>{adminLogin&&<button type="button" className="link" onClick={()=>{setMode('recover');setError('');setNotice('');}}>Zaboravljena lozinka?</button>}</div>}
       {error&&<p className="error" role="alert">{error}</p>}{notice&&<p className="notice">{notice}</p>}
       <button className="primary" disabled={busy}>{busy?'Pričekajte…':mode==='login'?'Prijavi se':mode==='recover'?'Pošalji poveznicu':'Spremi lozinku'}</button>
     </form>
     {mode!=='login'&&<button className="link login-back" onClick={()=>{setMode('login');setError('');setNotice('');}}><ArrowLeft size={16}/> Povratak na prijavu</button>}
-    {demo&&mode==='login'&&<button className="secondary demo-button" disabled={busy} onClick={async()=>{setBusy(true);setError('');try{await api('/login','POST',{kind:'local',email:'lena@formapoint.test',password:'Webmail-Test-2026'});await onLogin();}catch(e){setError(toError(e));}finally{setBusy(false);}}}>Otvori probni sandučić</button>}
+    {mode==='login'&&<a className="link login-back" href={adminLogin?'/':'/admin/prijava'}>{adminLogin?'Prijava u WebmailHR':'Prijava administratora'}</a>}
+    {demo&&mode==='login'&&!adminLogin&&<button className="secondary demo-button" disabled={busy} onClick={async()=>{setBusy(true);setError('');try{await api('/auth/admin-login','POST',{identifier:'lena@formapoint.test',password:'Webmail-Test-2026'});await onLogin();}catch(e){setError(toError(e));}finally{setBusy(false);}}}>Otvori probni sandučić</button>}
   </section></div><div className="envelope-art" aria-hidden="true"><Mail strokeWidth={.45}/></div></div>;
 }
 const navigation=[{key:'mail',label:'Pošta',path:'/',icon:Mail},{key:'calendar',label:'Kalendar',path:'/kalendar',icon:CalendarDays},{key:'contacts',label:'Kontakti',path:'/kontakti',icon:UsersRound},{key:'admin',label:'Administracija',path:'/admin',icon:Settings}];

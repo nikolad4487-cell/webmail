@@ -1,5 +1,5 @@
-import {authKind,externalKind,invalidLogin,staffSecret,verifyExternal} from './identity';
-import express, {type Request} from 'express';
+import {invalidLogin,staffSecret,verifyFormaPoint,verifyStudent} from './identity';
+import express, {type Request,type Response} from 'express';
 import {createServer as createHttpServer} from 'node:http';
 import {resolve} from 'node:path';
 import {z, ZodError} from 'zod';
@@ -40,43 +40,66 @@ async function limit(key:string, max:number) {
 api.get('/health',async (_req,res)=>{await db.query('select 1');res.json({ok:true,demo});});
 const localAccount = "(role='root' or ($2::boolean and right(email,5)='.test'))";
 const studentBox = "(u.auth_kind<>'ednevnik' or (m.address=u.email and not m.shared and (right(u.email,12)='@skolehr.xyz' or ($2::boolean and right(u.email,13)='@skolehr.test'))))";
+const studentDomains=new Set((process.env.EDNEVNIK_LOGIN_DOMAINS || 'skolehr.xyz,eskole.me')
+  .split(',').map(domain=>domain.trim().toLowerCase()).filter(Boolean));
+if(demo)studentDomains.add('skolehr.test');
 const noMailbox=()=>new HttpError(403,'Prijava je uspjela. Administrator treba dodijeliti pristup sandučiću.');
-api.post('/login',async (req,res)=>{
-  const input=z.object({kind:authKind.default('local'),username:z.string().trim().min(1).max(254).optional(),
-    email:z.string().optional(),password:z.string().min(1).max(512),remember:z.boolean().optional()}).parse(req.body);
-  const {kind,password}=input;
-  const identifier=externalKind(kind)?z.string().trim().min(1).max(254).parse(input.username):email.parse(input.email);
-  const rateKey='login:'+(kind==='local'?'':kind+':')+identifier.toLowerCase();
+async function signIn(req:Request,res:Response,adminLogin=false){
+  const input=z.object({identifier:z.string().trim().min(1).max(254),password:z.string().min(1).max(512),
+    remember:z.boolean().optional()}).strict().parse(req.body);
+  const {identifier,password}=input;
+  const address=email.safeParse(identifier);
+  const loginName=address.success?address.data:identifier;
+  if(!address.success && (adminLogin || identifier.includes('@'))) throw invalidLogin();
+  const rateKey='login:'+(adminLogin?'admin:':'')+loginName.toLowerCase();
   await limit('ip:'+req.ip,80);
+  const {rows:matches}=address.success ? await db.query(
+    'select id,email,auth_kind,password,role,active,source_project,source_user_id,source_email from users where email=$1 or source_email=$1',
+    [address.data]) : {rows:[]};
+  const linked=matches.length===1 && matches[0].active ? matches[0] : undefined;
+  const studentIdentifier=!address.success || studentDomains.has(address.data.split('@').at(-1)!);
+  const kind=adminLogin?'local':linked?.auth_kind ?? (matches.length===0 && studentIdentifier?'ednevnik':undefined);
   await limit(rateKey,kind==='staff'?6:12);
+  if(!kind) throw invalidLogin();
+
   let verifiedId:number, checkedHash:string|null=null;
   let source:{projectId:string;userId:string}|undefined;
-  if(externalKind(kind)){
-    source=await verifyExternal(kind,identifier,password);
+  let checkedSourceEmail:string|null=null;
+  if(kind==='ednevnik'){
+    source=await verifyStudent(loginName,password);
     const {rows:[account]}=await db.query('select id from users where auth_kind=$1 and source_project=$2 and source_user_id=$3 and active',
       [kind,source.projectId,source.userId]);
+    if(linked && account?.id!==linked.id) throw invalidLogin();
     if(!account) throw noMailbox();
     verifiedId=account.id;
+  }else if(kind==='formapoint'){
+    if(!linked?.source_email) throw invalidLogin();
+    checkedSourceEmail=linked.source_email;
+    source=await verifyFormaPoint(linked.source_email,password,{projectId:linked.source_project,userId:linked.source_user_id});
+    verifiedId=linked.id;
   }else{
-    const scope=kind==='local'?" and (role='root' or ($3::boolean and right(email,5)='.test'))":'';
-    const {rows:[account]}=await db.query('select id,password from users where email=$1 and active and auth_kind=$2'+scope,kind==='local'?[identifier,kind,demo]:[identifier,kind]);
+    const allowed=linked && linked.auth_kind===kind && (
+      kind==='staff' || (adminLogin && linked.role==='root' && linked.email===loginName) ||
+      (demo && linked.email.endsWith('.test') && (adminLogin || linked.role!=='root')));
     if(kind==='staff' && !/^[0-9]{8}$/.test(password)) throw invalidLogin();
     const candidate=kind==='staff'?staffSecret(password):password;
-    const matches=await verifyPassword(candidate,account?.password ?? fallback);
-    if(!matches || !account?.password) throw invalidLogin();
-    verifiedId=account.id;checkedHash=account.password;
+    const matches=await verifyPassword(candidate,allowed?linked.password??fallback:fallback);
+    if(!matches || !allowed || !linked.password) throw invalidLogin();
+    verifiedId=linked.id;checkedHash=linked.password;
   }
   const key=token(), lifetime=(input.remember?30:1)*86400000;
   await transaction(async client=>{
-    const {rows:[account]}=await client.query('select password,source_project,source_user_id from users where id=$1 and auth_kind=$2 and active for update',[verifiedId,kind]);
-    if(!account || account.password!==checkedHash || (source && (account.source_project!==source.projectId || account.source_user_id!==source.userId))) throw invalidLogin();
+    const {rows:[account]}=await client.query('select password,source_project,source_user_id,source_email from users where id=$1 and auth_kind=$2 and active for update',[verifiedId,kind]);
+    if(!account || account.password!==checkedHash || (source && (account.source_project!==source.projectId || account.source_user_id!==source.userId || account.source_email!==checkedSourceEmail))) throw invalidLogin();
     if(source && !(await client.query(`select 1 from grants g join mailboxes m on m.id=g.box join users u on u.id=g.uid
       where u.id=$1 and m.active and ${studentBox} limit 1`,[verifiedId,demo])).rowCount) throw noMailbox();
     await client.query('delete from login_limits where key=$1',[digest(rateKey)]);
     await client.query('insert into sessions values($1,$2,$3)',[digest(key),verifiedId,new Date(Date.now()+lifetime)]);
   });
   res.cookie(cookie,key,{...cookieOptions,...(input.remember?{maxAge:lifetime}:{})}).json({ok:true});
-});
+}
+api.post('/login',(req,res)=>signIn(req,res));
+api.post('/auth/admin-login',(req,res)=>signIn(req,res,true));
 api.post('/recover',async (req,res)=>{
   const address=email.parse(req.body.email);
   await limit('recovery:'+req.ip,8);

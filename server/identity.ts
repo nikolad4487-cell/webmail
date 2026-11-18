@@ -18,7 +18,7 @@ function project(kind:ExternalKind){
   const otherUrl=process.env[other+'_SUPABASE_URL'];
   if(!projectId || projectId.length>200 || projectId===process.env[other+'_SUPABASE_PROJECT_ID']?.trim() ||
      (otherUrl && URL.canParse(otherUrl) && new URL(otherUrl).origin===url.origin)) throw unavailable();
-  return {projectId,url,apiKey:get('SUPABASE_AUTH_KEY'),rpc:get('USERNAME_RPC'),resolverToken:get('USERNAME_RPC_TOKEN'),
+  return {projectId,url,apiKey:get('SUPABASE_AUTH_KEY'),
     loginUrl:get('USERNAME_LOGIN_URL'),loginToken:get('USERNAME_LOGIN_TOKEN')};
 }
 
@@ -45,27 +45,24 @@ async function request(url:URL,body:object,headers:Record<string,string>,invalid
 }
 
 export const projectIdFor=(kind:ExternalKind)=>project(kind).projectId;
-export async function verifyExternal(kind:ExternalKind,username:string,password:string){
-  const config=project(kind);
-  if(config.loginUrl){
-    if(!config.loginToken) throw unavailable();
-    const result=await request(safeUrl(config.loginUrl),{username,password},{Authorization:'Bearer '+config.loginToken},[401,403,404]);
-    const parsed=sourceId.safeParse((result as {user_id?:unknown}|null)?.user_id);
-    if(!parsed.success) throw unavailable();
-    return {projectId:config.projectId,userId:parsed.data};
-  }
-  if(!config.apiKey || !config.resolverToken || !/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(config.rpc)) throw unavailable();
-  const resolved=await request(new URL('/rest/v1/rpc/'+config.rpc,config.url),{username},
-    {apikey:config.apiKey,Authorization:'Bearer '+config.resolverToken},[]);
-  if(resolved===null) throw invalidLogin();
-  const identity=z.union([z.object({email:z.email(),phone:z.never().optional()}),
-    z.object({phone:z.string().regex(/^\+?[0-9]{6,20}$/),email:z.never().optional()})]).safeParse(resolved);
-  if(!identity.success) throw unavailable();
-  const result=await request(new URL('/auth/v1/token?grant_type=password',config.url),
-    {...identity.data,password},{apikey:config.apiKey},[400,401,403]);
-  const parsed=sourceId.safeParse((result as {user?:{id?:unknown}}|null)?.user?.id);
+export async function verifyStudent(username:string,password:string){
+  const config=project('ednevnik');
+  if(!config.loginUrl || !config.loginToken) throw unavailable();
+  const result=await request(safeUrl(config.loginUrl),{username,password},{Authorization:'Bearer '+config.loginToken},[401]);
+  const parsed=sourceId.safeParse((result as {user_id?:unknown}|null)?.user_id);
   if(!parsed.success) throw unavailable();
   return {projectId:config.projectId,userId:parsed.data};
+}
+
+export async function verifyFormaPoint(email:string,password:string,link:{projectId:string;userId:string}){
+  const config=project('formapoint');
+  if(!config.apiKey) throw unavailable();
+  if(config.projectId!==link.projectId) throw invalidLogin();
+  const result=await request(new URL('/auth/v1/token?grant_type=password',config.url),
+    {email,password},{apikey:config.apiKey},[400,401,403]);
+  const parsed=sourceId.safeParse((result as {user?:{id?:unknown}}|null)?.user?.id);
+  if(!parsed.success || parsed.data!==link.userId) throw invalidLogin();
+  return link;
 }
 
 export function staffSecret(pin:string){

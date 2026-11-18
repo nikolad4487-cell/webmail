@@ -13,7 +13,7 @@ const tables={
   organizations:{columns:'id,name',scope:'id',schema:z.object({name:text})},
   schools:{columns:'id,org,name',scope:'org',schema:z.object({name:text})},
   domains:{columns:'name,org,inbound,outbound',scope:'org',schema:z.object({name:z.string().toLowerCase().regex(/^(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z0-9-]+$/).max(253),inbound:z.boolean(),outbound:z.boolean()})},
-  users:{columns:'id,org,school,name,email,role,active,recovery,auth_kind,source_project,source_user_id',scope:'org',schema:z.object({name:text,email,school:id.nullable(),role:z.enum(['root','admin','user']),active:z.boolean(),recovery:email.nullable(),auth_kind:authKind.optional(),source_user_id:sourceId.nullable().optional(),password:z.string().min(12).max(512).optional()})},
+  users:{columns:'id,org,school,name,email,role,active,recovery,auth_kind,source_project,source_user_id,source_email',scope:'org',schema:z.object({name:text,email,school:id.nullable(),role:z.enum(['root','admin','user']),active:z.boolean(),recovery:email.nullable(),auth_kind:authKind.optional(),source_user_id:sourceId.nullable().optional(),source_email:email.nullable().optional(),password:z.string().min(12).max(512).optional()})},
   mailboxes:{columns:'id,org,address,label,shared,active,target_quota_gb',scope:'org',schema:z.object({address:email,label:text,shared:z.boolean(),active:z.boolean(),target_quota_gb:z.number().int().min(1).max(10000)})},
   senders:{columns:'id,org,address,reply_to,kind,active',scope:'org',schema:z.object({address:email,reply_to:email,kind:z.enum(['order','promotion']),active:z.boolean()})},
 };
@@ -143,7 +143,7 @@ export function setupData(api:Router){
       await c.query('update users set password=$2,recovery=null where id=$1',[uid,await hashPassword(secret)]);
       await c.query('delete from sessions where uid=$1',[uid]);
       await c.query('delete from resets where uid=$1',[uid]);
-      await c.query('delete from login_limits where key=$1',[digest('login:staff:'+account.email)]);
+      await c.query('delete from login_limits where key=$1',[digest('login:'+account.email)]);
       await c.query('insert into audits(uid,action,target) values($1,$2,$3)',[a.id,'staff.pin.rotate',String(uid)]);
       return value;
     });
@@ -198,9 +198,19 @@ export function setupData(api:Router){
           input.source_user_id=null;
           input.source_project=null;
         }
+        if(kind==='formapoint'){
+          input.source_email=email.parse(input.source_email ?? current?.source_email);
+        }else input.source_email=null;
         revoke=!!current&&(current.auth_kind!==kind || current.source_project!==input.source_project ||
-          current.source_user_id!==input.source_user_id || current.email!==input.email ||
+          current.source_user_id!==input.source_user_id || current.source_email!==input.source_email || current.email!==input.email ||
           current.role!==input.role || current.active!==input.active || typeof input.password==='string');
+      }
+      if(name==='users'){
+        const addresses=[...new Set([input.email,input.source_email].filter(Boolean))].sort();
+        for(const value of addresses) await c.query('select pg_advisory_xact_lock(hashtextextended($1,0))',[value]);
+        const conflict=await c.query('select 1 from users where (email=any($1::text[]) or source_email=any($1::text[])) and id is distinct from $2',
+          [addresses,requested]);
+        if(conflict.rowCount) throw new HttpError(409,'Adresa za prijavu već pripada drugom korisniku.');
       }
       const address=input.address || input.email;
       if(address && !(await c.query('select 1 from domains where org=$1 and name=$2',[org,addressing(String(address))])).rowCount) throw new HttpError(400,'Domena nije registrirana za ovu organizaciju.');

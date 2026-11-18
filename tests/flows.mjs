@@ -16,7 +16,7 @@ async function request(path,{cookie,body,method=body===undefined?'GET':'POST',ke
 const sessions=new Map();
 async function login(email){
   if(sessions.has(email)) return sessions.get(email);
-  const {cookie}=await request('/login',{body:{email,password:'Webmail-Test-2026'}});
+  const {cookie}=await request(email==='lena@formapoint.test'?'/auth/admin-login':'/login',{body:{identifier:email,password:'Webmail-Test-2026'}});
   const {body}=await request('/me',{cookie});
   const result={cookie,boxes:body.boxes,user:body.account};
   sessions.set(email,result);
@@ -145,14 +145,14 @@ test('Oporavak preko potvrđene adrese, jednokratan token i opoziv sesije',async
   assert.ok(key);
   await request('/reset',{body:{key,password:'Other-Webmail-Test-2026'},status:400});
   await request('/me',{cookie:old.cookie,status:401});
-  await request('/login',{body:{email:address,password:'New-Webmail-Test-2026'}});
+  await request('/login',{body:{identifier:address,password:'New-Webmail-Test-2026'}});
 });
 
-async function provision(kind,username,address,org){
+async function provision(kind,username,address,org,sourceEmail=null){
   const {cookie}=await login('lena@formapoint.test');
   const previous=(await request('/admin/users',{cookie})).body.find(x=>x.email===address);
   await request('/admin/users',{cookie,body:{key:previous?.id,org,email:address,name:'Probni '+kind,school:null,role:'user',active:true,recovery:null,
-    auth_kind:kind,source_user_id:username}});
+    auth_kind:kind,source_user_id:username,source_email:sourceEmail}});
   const {body}=await request('/admin/users',{cookie});
   const account=body.find(x=>x.email===address);
   assert.ok(account);
@@ -167,12 +167,14 @@ test('Odvojeni projekti, isti korisnički identifikator i provjera nove izvorne 
   const username='shared-'+run, initial='Source-Test-2026', next='Source-Changed-2026';
   const studentAddress='ucenik@skolehr.test';
   const support=businessBoxes.find(x=>x.address==='info@formapoint.test');
-  const external=(kind,password=initial,status=200)=>request('/login',{body:{kind,username,password},status});
+  const webmailAddress='kupac-'+run+'@formapoint.test', sourceEmail=username+'@source.formapoint.test';
+  const external=(kind,password=initial,status=200)=>request('/login',{body:{identifier:kind==='ednevnik'?username:webmailAddress,password},status});
+  await external('formapoint',initial,401);
   const missing=await external('ednevnik',initial,403);
   assert.match(missing.body.error,/dodijeliti pristup/);
   assert.equal(missing.cookie,undefined);
   const student=await provision('ednevnik',username,studentAddress,school);
-  const employee=await provision('formapoint',username,'kupac-'+run+'@formapoint.test',business);
+  const employee=await provision('formapoint',username,webmailAddress,business,sourceEmail);
   assert.equal(student.source_project,'ednevnik-test');
   assert.equal(employee.source_project,'formapoint-test');
   assert.equal(student.source_user_id,employee.source_user_id);
@@ -192,6 +194,14 @@ test('Odvojeni projekti, isti korisnički identifikator i provjera nove izvorne 
   await external('ednevnik',initial,403);
   await grant(student.id,studentBox.id);
   await grant(employee.id,support.id);
+  assert.ok((await request('/login',{body:{identifier:sourceEmail,password:initial}})).cookie);
+  const setId=async id=>{
+    const response=await fetch('http://127.0.0.1:3015/_test/set-auth-id',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username,id})});
+    assert.equal(response.status,200);
+  };
+  await setId('another-auth-id');
+  assert.equal((await external('formapoint',initial,401)).cookie,undefined);
+  await setId(username);
   for(const [kind,port,expected,denied] of [
     ['ednevnik',3014,studentBox.id,schoolOffice.id],['formapoint',3015,support.id,studentBox.id],
   ]){
@@ -200,7 +210,7 @@ test('Odvojeni projekti, isti korisnički identifikator i provjera nove izvorne 
     assert.deepEqual(me.body.boxes.map(box=>box.id),[expected]);
     await request('/mail/'+denied+'/attachment?path=INBOX&id=1&index=0',{cookie,status:403});
     await request('/mail/'+expected,{cookie});
-    const change=await fetch('http://127.0.0.1:'+port+'/_test/change-password',{method:'POST',body:JSON.stringify({username,oldPassword:initial,newPassword:next})});
+    const change=await fetch('http://127.0.0.1:'+port+'/_test/change-password',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username,oldPassword:initial,newPassword:next})});
     assert.equal(change.status,200);
     await external(kind,initial,401);
     const updated=await external(kind,next);
@@ -224,13 +234,14 @@ test('Osmeroznamenkasta lozinka djelatnika, ograničenje pokušaja i opoziv sesi
   const pinUrl='/admin/users/'+staff.id+'/pin';
   const {body:first}=await request(pinUrl,{cookie:admin,method:'POST'});
   assert.match(first.pin,/^[0-9]{8}$/);
-  const staffLogin=(password,status=200)=>request('/login',{body:{kind:'staff',email,password},status});
+  const staffLogin=(password,status=200)=>request('/login',{body:{identifier:email,password},status});
   const {cookie}=await staffLogin(first.pin);
+  await request('/login',{body:{identifier:'lena@formapoint.test',password:'Webmail-Test-2026'},status:401});
   assert.deepEqual((await request('/me',{cookie})).body.boxes.map(box=>box.id),[referada.id]);
   await request('/mail/'+referada.id,{cookie});
   await request('/mail/'+privateBox.id,{cookie,status:403});
   await request(pinUrl,{cookie,method:'POST',status:403});
-  await request('/login',{body:{kind:'local',email,password:first.pin},status:401});
+  await request('/auth/admin-login',{body:{identifier:email,password:first.pin},status:401});
   for(let i=0;i<6;i++)await staffLogin('1234567',401);
   await staffLogin(first.pin,429);
   const {body:second}=await request(pinUrl,{cookie:admin,method:'POST'});

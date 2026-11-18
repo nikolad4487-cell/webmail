@@ -11,7 +11,7 @@ const sections={
   organizations:{label:'Organizacije',icon:Building2,fields:[name]},
   schools:{label:'Škole i ustanove',icon:School,fields:[name]},
   domains:{label:'Domene',icon:Globe,fields:[{key:'name',label:'Domena'},{key:'inbound',label:'IMAP / primanje',type:'check'},{key:'outbound',label:'SMTP / slanje',type:'check'}]},
-  users:{label:'Korisnici',icon:UsersRound,fields:[name,{...address,key:'email'},{key:'school',label:'Škola ili ustanova',type:'school',optional:true},{key:'role',label:'Uloga',options:[['user','Korisnik'],['admin','Administrator organizacije'],['root','Glavni administrator']] as [string,string][]},active,{key:'auth_kind',label:'Vrsta računa',options:accountKinds.map(([key,label]):[string,string]=>[key,label])},{key:'source_user_id',label:'Stabilni ID korisnika',optional:true},{key:'recovery',label:'Potvrđena adresa za oporavak',type:'email',optional:true},{key:'password',label:'Lozinka',type:'password'}]},
+  users:{label:'Korisnici',icon:UsersRound,fields:[name,{...address,key:'email'},{key:'school',label:'Škola ili ustanova',type:'school',optional:true},{key:'role',label:'Uloga',options:[['user','Korisnik'],['admin','Administrator organizacije'],['root','Glavni administrator']] as [string,string][]},active,{key:'auth_kind',label:'Vrsta računa',options:accountKinds.map(([key,label]):[string,string]=>[key,label])},{key:'source_user_id',label:'Stabilni ID korisnika',optional:true},{key:'source_email',label:'E-mail u FormaPoint Supabase Authu',type:'email'},{key:'recovery',label:'Potvrđena adresa za oporavak',type:'email',optional:true},{key:'password',label:'Lozinka',type:'password'}]},
   mailboxes:{label:'Sandučići',icon:Inbox,fields:[address,{key:'label',label:'Naziv'},{key:'shared',label:'Zajednički sandučić',type:'check'},active,{key:'target_quota_gb',label:'Ciljana kvota (GB)',type:'number'}]},
   senders:{label:'Automatski pošiljatelji',icon:Send,fields:[address,{...address,key:'reply_to',label:'Adresa za odgovor'},{key:'kind',label:'Namjena',options:[['order','Narudžbe'],['promotion','Promocije']] as [string,string][]},active]},
   logs:{label:'Zapisi dostave',icon:ClipboardList,fields:[address,{key:'external_id',label:'Događaj'},{key:'recipient',label:'Primatelj'},{key:'status',label:'Status'},{key:'at',label:'Vrijeme'}]},
@@ -56,6 +56,7 @@ export function Admin({session}:{session:Session}){
   function showField(field:Field){
     if(section!=='users')return true;
     if(field.key==='source_user_id')return usesUsername(kind);
+    if(field.key==='source_email')return kind==='formapoint';
     if(['password','recovery'].includes(field.key))return kind==='local';
     return true;
   }
@@ -74,7 +75,7 @@ export function Admin({session}:{session:Session}){
     catch(e){setError(toError(e));}finally{setStorageBusy(false);}
   }
   const filtered=rows.filter(row=>(!filter||String(row.org)===filter)&&Object.values(row).some(x=>String(x).toLowerCase().includes(search.toLowerCase())));
-  const visible=fields.filter(x=>!['password','recovery','source_user_id'].includes(x.key));
+  const visible=fields.filter(x=>!['password','recovery','source_user_id','source_email'].includes(x.key));
   const display=(value:RecordRow[string],field:Field)=>{
     if(typeof value==='boolean')return value?'Da':'Ne';
     if(field.key==='status')return <span className={'status '+String(value)}>{statuses[String(value)]}</span>;
