@@ -57,6 +57,10 @@ Dodijelite `webmailhr.com` i `admin.webmailhr.com` istom projektu. U produkcijsk
 postavkama projekta postavite serverski `DATABASE_URL`, `APP_ORIGIN` i
 `ADMIN_ORIGIN`, primijenite migracije na ciljnu bazu i ponovno objavite projekt.
 
+Ako koristite i `www.webmailhr.com`, dodijelite je istom projektu. Obje javne
+domene prihvaćaju prijavu s vlastitog HTTPS podrijetla. Zahtjev s jedne domene
+na drugu i dalje se odbija. Reverse proxy treba sačuvati izvorni `Host`.
+
 Na `https://admin.webmailhr.com/api/login-settings` očekuje se JSON s
 `adminSite: true`. Ako ta adresa vraća HTML ili platformsku stranicu 404,
 provjerite je li aktivna objava izgradila API funkciju i koristi li preusmjeravanja

@@ -8,13 +8,26 @@ import {setupData} from './workspace.js';
 import {setupAutomation} from './automation.js';
 
 const app=express(), api=express.Router(), production=process.env.NODE_ENV==='production';
-const origin=process.env.APP_ORIGIN || (production?'https://webmailhr.com':'');
-const configuredAdminUrl=process.env.ADMIN_ORIGIN || (production?'https://admin.webmailhr.com':'');
-const adminUrl=configuredAdminUrl ? new URL(configuredAdminUrl) : undefined;
+const configuredPublicOrigin=process.env.APP_ORIGIN?.trim() || (production?'https://webmailhr.com':'');
+const publicUrl=configuredPublicOrigin ? new URL(configuredPublicOrigin) : undefined;
+const origin=publicUrl?.origin || '';
+const configuredAdminOrigin=process.env.ADMIN_ORIGIN?.trim() || (production?'https://admin.webmailhr.com':'');
+const adminUrl=configuredAdminOrigin ? new URL(configuredAdminOrigin) : undefined;
 const adminOrigin=adminUrl?.origin || '';
 const adminHost=adminUrl?.host || '';
-const isAdminSite=(req:Request)=>!!adminHost && req.get('host')?.toLowerCase()===adminHost;
-const currentOrigin=(req:Request)=>(isAdminSite(req)?adminOrigin:origin) || `${req.protocol}://${req.get('host')}`;
+const publicHosts=new Map<string,string>();
+if(publicUrl) publicHosts.set(publicUrl.host,publicUrl.origin);
+if(production || publicUrl?.hostname==='webmailhr.com' || publicUrl?.hostname==='www.webmailhr.com'){
+  publicHosts.set('webmailhr.com','https://webmailhr.com');
+  publicHosts.set('www.webmailhr.com','https://www.webmailhr.com');
+}
+const requestHost=(req:Request)=>req.get('host')?.toLowerCase() || '';
+const isAdminSite=(req:Request)=>!!adminHost && requestHost(req)===adminHost;
+function currentOrigin(req:Request){
+  if(isAdminSite(req)) return adminOrigin;
+  const host=requestHost(req);
+  return publicHosts.get(host) || (!production && !origin && host ? `${req.protocol}://${host}` : undefined);
+}
 if(adminOrigin) app.get('/admin/prijava',(_req,res)=>res.redirect(302,adminOrigin+'/'));
 app.disable('x-powered-by');
 if (process.env.TRUST_PROXY==='1') app.set('trust proxy',1);
