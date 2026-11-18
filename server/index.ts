@@ -12,6 +12,13 @@ import {setupAutomation} from './automation';
 const app=express(), api=express.Router(), production=process.env.NODE_ENV==='production';
 const server=createHttpServer(app);
 const origin=process.env.APP_ORIGIN || (production?'https://webmailhr.com':'');
+const configuredAdminUrl=process.env.ADMIN_ORIGIN || (production?'https://admin.webmailhr.com':'');
+const adminUrl=configuredAdminUrl ? new URL(configuredAdminUrl) : undefined;
+const adminOrigin=adminUrl?.origin || '';
+const adminHost=adminUrl?.host || '';
+const isAdminSite=(req:Request)=>!!adminHost && req.get('host')?.toLowerCase()===adminHost;
+const currentOrigin=(req:Request)=>(isAdminSite(req)?adminOrigin:origin) || `${req.protocol}://${req.get('host')}`;
+if(adminOrigin) app.get('/admin/prijava',(_req,res)=>res.redirect(302,adminOrigin+'/'));
 app.disable('x-powered-by');
 if (process.env.TRUST_PROXY==='1') app.set('trust proxy',1);
 app.use((_req,res,next)=>{
@@ -22,7 +29,7 @@ app.use((_req,res,next)=>{
 app.use('/api',express.json({limit:'17mb'}),(_req,res,next)=>{res.set('Cache-Control','no-store');next();},api);
 api.use((req,_res,next)=>{
   if (!['GET','HEAD','OPTIONS'].includes(req.method) && req.get('origin')) {
-    const expected = origin || `${req.protocol}://${req.get('host')}`;
+    const expected=currentOrigin(req);
     if (req.get('origin')!==expected) throw new HttpError(403,'Zahtjev nije dopušten.');
   }
   next();
@@ -38,6 +45,7 @@ async function limit(key:string, max:number) {
   if(rows[0].count>max) throw new HttpError(429,'Previše pokušaja. Pokušajte ponovno za 15 minuta.');
 }
 api.get('/health',async (_req,res)=>{await db.query('select 1');res.json({ok:true,demo});});
+api.get('/login-settings',(req,res)=>res.json({demo,adminSite:isAdminSite(req),adminUrl:adminOrigin,publicUrl:origin}));
 const localAccount = "(role='root' or ($2::boolean and right(email,5)='.test'))";
 const studentBox = "(u.auth_kind<>'ednevnik' or (m.address=u.email and not m.shared and (right(u.email,12)='@skolehr.xyz' or ($2::boolean and right(u.email,13)='@skolehr.test'))))";
 const studentDomains=new Set((process.env.EDNEVNIK_LOGIN_DOMAINS || 'skolehr.xyz,eskole.me')
@@ -60,7 +68,7 @@ async function signIn(req:Request,res:Response,adminLogin=false){
   const studentIdentifier=!address.success || studentDomains.has(address.data.split('@').at(-1)!);
   const kind=adminLogin?'local':linked?.auth_kind ?? (matches.length===0 && studentIdentifier?'ednevnik':undefined);
   await limit(rateKey,kind==='staff'?6:12);
-  if(!kind) throw invalidLogin();
+  if(!kind || (adminLogin && password.length<8)) throw invalidLogin();
 
   let verifiedId:number, checkedHash:string|null=null;
   let source:{projectId:string;userId:string}|undefined;
@@ -80,7 +88,7 @@ async function signIn(req:Request,res:Response,adminLogin=false){
   }else{
     const allowed=linked && linked.auth_kind===kind && (
       kind==='staff' || (adminLogin && linked.role==='root' && linked.email===loginName) ||
-      (demo && linked.email.endsWith('.test') && (adminLogin || linked.role!=='root')));
+      (demo && linked.email.endsWith('.test') && ((adminLogin && !adminOrigin) || (!adminLogin && linked.role!=='root'))));
     if(kind==='staff' && !/^[0-9]{8}$/.test(password)) throw invalidLogin();
     const candidate=kind==='staff'?staffSecret(password):password;
     const matches=await verifyPassword(candidate,allowed?linked.password??fallback:fallback);
@@ -89,8 +97,8 @@ async function signIn(req:Request,res:Response,adminLogin=false){
   }
   const key=token(), lifetime=(input.remember?30:1)*86400000;
   await transaction(async client=>{
-    const {rows:[account]}=await client.query('select password,source_project,source_user_id,source_email from users where id=$1 and auth_kind=$2 and active for update',[verifiedId,kind]);
-    if(!account || account.password!==checkedHash || (source && (account.source_project!==source.projectId || account.source_user_id!==source.userId || account.source_email!==checkedSourceEmail))) throw invalidLogin();
+    const {rows:[account]}=await client.query('select role,password,source_project,source_user_id,source_email from users where id=$1 and auth_kind=$2 and active for update',[verifiedId,kind]);
+    if(!account || (adminOrigin && adminLogin && account.role!=='root') || account.password!==checkedHash || (source && (account.source_project!==source.projectId || account.source_user_id!==source.userId || account.source_email!==checkedSourceEmail))) throw invalidLogin();
     if(source && !(await client.query(`select 1 from grants g join mailboxes m on m.id=g.box join users u on u.id=g.uid
       where u.id=$1 and m.active and ${studentBox} limit 1`,[verifiedId,demo])).rowCount) throw noMailbox();
     await client.query('delete from login_limits where key=$1',[digest(rateKey)]);
@@ -98,29 +106,38 @@ async function signIn(req:Request,res:Response,adminLogin=false){
   });
   res.cookie(cookie,key,{...cookieOptions,...(input.remember?{maxAge:lifetime}:{})}).json({ok:true});
 }
-api.post('/login',(req,res)=>signIn(req,res));
-api.post('/auth/admin-login',(req,res)=>signIn(req,res,true));
+api.post('/login',(req,res)=>{
+  if(isAdminSite(req)) return deny();
+  return signIn(req,res);
+});
+api.post('/auth/admin-login',(req,res)=>{
+  if(adminOrigin && !isAdminSite(req)) return deny();
+  return signIn(req,res,true);
+});
 api.post('/recover',async (req,res)=>{
+  if(adminOrigin && !isAdminSite(req)) return deny();
   const address=email.parse(req.body.email);
   await limit('recovery:'+req.ip,8);
   const {rows:[account]}=await db.query("select id,recovery from users where email=$1 and active and recovery is not null and auth_kind='local' and "+localAccount,[address,demo]);
   const from=process.env.RECOVERY_SENDER;
-  if(account && from && origin) {
+  const resetOrigin=isAdminSite(req)?adminOrigin:origin;
+  if(account && from && resetOrigin) {
     const key=token();
     await db.query("insert into resets values($1,$2,now()+interval '30 minutes')",[digest(key),account.id]);
-    const mail={from,to:[account.recovery],subject:'Ponovno postavljanje lozinke',text:origin+'/?reset='+key};
+    const mail={from,to:[account.recovery],subject:'Ponovno postavljanje lozinke',text:resetOrigin+'/?reset='+key};
     try { await smtp(from,mail,await mime(mail)); } catch { console.error('Predaja poruke za oporavak nije uspjela.'); }
   }
   res.json({ok:true});
 });
 api.post('/reset',async (req,res)=>{
+  if(adminOrigin && !isAdminSite(req)) return deny();
   await limit('reset:'+req.ip,12);
-  const input=z.object({key:z.string().regex(/^[a-f0-9]{64}$/),password:z.string().min(12).max(512)}).parse(req.body);
+  const input=z.object({key:z.string().regex(/^[a-f0-9]{64}$/),password:z.string().min(8).max(512)}).parse(req.body);
   const secret=await hashPassword(input.password);
   await transaction(async client=>{
     const {rows:[reset]}=await client.query('delete from resets where token=$1 and expires>now() returning uid',[digest(input.key)]);
     if(!reset) throw new HttpError(400,'Poveznica je istekla ili nije valjana.');
-    const updated=await client.query("update users set password=$3 where id=$1 and active and auth_kind='local' and "+localAccount,[reset.uid,demo,secret]);
+    const updated=await client.query("update users set password=$3 where id=$1 and active and auth_kind='local' and "+localAccount+" and (role='root' or $4::boolean)",[reset.uid,demo,secret,input.password.length>=12]);
     if(!updated.rowCount) throw new HttpError(400,'Poveznica je istekla ili nije valjana.');
     await client.query('delete from sessions where uid=$1',[reset.uid]);
     await client.query('delete from resets where uid=$1',[reset.uid]);
@@ -132,7 +149,7 @@ api.use(async (req,_res,next)=>{
   const key=session(req);
   if(!key) throw new HttpError(401,'Prijavite se za nastavak.');
   const {rows:[account]}=await db.query(`select u.id,u.org,u.email,u.name,u.role from users u join sessions s on s.uid=u.id where s.token=$1 and s.expires>now() and u.active and (u.auth_kind<>'local' or ${localAccount})`,[digest(key),demo]);
-  if(!account) throw new HttpError(401,'Sesija je istekla.');
+  if(!account || (adminOrigin && (account.role==='root')!==isAdminSite(req))) throw new HttpError(401,'Sesija je istekla.');
   Object.assign(req,{account}); next();
 });
 api.post('/logout',async (req,res)=>{await db.query('delete from sessions where token=$1',[digest(session(req)!)]);res.clearCookie(cookie,cookieOptions).json({ok:true});});

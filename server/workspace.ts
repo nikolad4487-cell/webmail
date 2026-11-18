@@ -13,7 +13,7 @@ const tables={
   organizations:{columns:'id,name',scope:'id',schema:z.object({name:text})},
   schools:{columns:'id,org,name',scope:'org',schema:z.object({name:text})},
   domains:{columns:'name,org,inbound,outbound',scope:'org',schema:z.object({name:z.string().toLowerCase().regex(/^(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z0-9-]+$/).max(253),inbound:z.boolean(),outbound:z.boolean()})},
-  users:{columns:'id,org,school,name,email,role,active,recovery,auth_kind,source_project,source_user_id,source_email',scope:'org',schema:z.object({name:text,email,school:id.nullable(),role:z.enum(['root','admin','user']),active:z.boolean(),recovery:email.nullable(),auth_kind:authKind.optional(),source_user_id:sourceId.nullable().optional(),source_email:email.nullable().optional(),password:z.string().min(12).max(512).optional()})},
+  users:{columns:'id,org,school,name,email,role,active,recovery,auth_kind,source_project,source_user_id,source_email',scope:'org',schema:z.object({name:text,email,school:id.nullable(),role:z.enum(['root','admin','user']),active:z.boolean(),recovery:email.nullable(),auth_kind:authKind.optional(),source_user_id:sourceId.nullable().optional(),source_email:email.nullable().optional(),password:z.string().min(8).max(512).optional()})},
   mailboxes:{columns:'id,org,address,label,shared,active,target_quota_gb',scope:'org',schema:z.object({address:email,label:text,shared:z.boolean(),active:z.boolean(),target_quota_gb:z.number().int().min(1).max(10000)})},
   senders:{columns:'id,org,address,reply_to,kind,active',scope:'org',schema:z.object({address:email,reply_to:email,kind:z.enum(['order','promotion']),active:z.boolean()})},
 };
@@ -181,7 +181,10 @@ export function setupData(api:Router){
         if(kind==='local'){
           const allowed=input.role==='root' || (demo && address.endsWith('.test'));
           if(!allowed && (!current || current.auth_kind!=='local' || input.password)) throw new HttpError(400,'Odaberite vrstu prijave za ovog korisnika.');
-          if(input.password) input.password=await hashPassword(String(input.password));
+          if(typeof input.password==='string'){
+            if(input.role!=='root' && input.password.length<12) throw new HttpError(400,'Lozinka mora imati najmanje 12 znakova.');
+            input.password=await hashPassword(input.password);
+          }
           else if(!current?.password || current.auth_kind!=='local') throw new HttpError(400,'Unesite početnu lozinku.');
           else delete input.password;
         }else{

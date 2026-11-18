@@ -33,8 +33,8 @@ Testovi provjeravaju izolaciju škola, pristup referadi, zabranu tuđeg privitka
 
 ## Produkcija
 
-1. Postavite PostgreSQL i vrijednosti iz [.env.example](.env.example) u serverskom upravitelju tajni. Koristite odvojene DB ovlasti za migracije i rad aplikacije, s TLS-om prema udaljenoj bazi. Pokrenite `npm ci`, `npm run migrate` i jednom `npm run bootstrap` uz `BOOTSTRAP_*`. Oporavak omogućite samo uz prethodno neovisno potvrđenu adresu oporavka, registriran servisni `RECOVERY_SENDER` i HTTPS `APP_ORIGIN`. Uklonite bootstrap lozinku iz konfiguracije nakon stvaranja računa.
-2. `npm run build` i `npm start`. Pred aplikaciju stavite HTTPS reverse proxy. Dopustite `TRUST_PROXY=1` samo za topologiju s jednim pouzdanim proxyjem koji prepisuje zaglavlja prosljeđivanja. Aplikacijski port ograničite na privatnu mrežu proxyja.
+1. Postavite PostgreSQL i vrijednosti iz [.env.example](.env.example) u serverskom upravitelju tajni. Koristite odvojene DB ovlasti za migracije i rad aplikacije, s TLS-om prema udaljenoj bazi. Pokrenite `npm ci` i `npm run migrate`, zatim postavite [glavnog administratora](#glavni-administrator).
+2. `npm run build` i `npm start`. Pred aplikaciju stavite HTTPS reverse proxy za obje domene. Sačuvajte izvorno zaglavlje `Host` pri prosljeđivanju zahtjeva. Dopustite `TRUST_PROXY=1` samo za topologiju s jednim pouzdanim proxyjem koji prepisuje zaglavlja prosljeđivanja. Aplikacijski port ograničite na privatnu mrežu proxyja.
 3. U administraciji dodajte organizacije, škole, domene, korisnike, sandučiće, pristupe i aliase. Poveznicu prema školi dodijelite korisničkom računu. Na mail poslužitelju zasebno provisionirajte stvarne sandučiće, SMTP identitete, dolazne aliase i kvote. Aplikacija ciljanu kvotu drži odvojeno od vrijednosti izmjerene kroz IMAP QUOTA. Za mailcow opcionalno postavite `MAILCOW_URL` i `MAILCOW_API_KEY` s ograničenjem IP-a i najmanjim raspoloživim pravima te primijenite kvotu u prikazu pohrane. `MAIL_CAPACITY_BYTES` je operativno dodijeljeni ukupni kapacitet pošte, očitan iz produkcijske infrastrukture i vidljiv glavnom administratoru. Kvote iznad 15 GiB, uključujući 100 GiB, dodijelite tek nakon provjere raspoloživog prostora i limita davatelja.
 4. `MAIL_ROUTES` je serverski JSON, indeksiran punom adresom sandučića ili servisnog pošiljatelja. Svaki zapis ima `imap` i/ili `smtp` objekt. Primjer strukture bez tajni:
 
@@ -49,9 +49,20 @@ Testovi provjeravaju izolaciju škola, pristup referadi, zabranu tuđeg privitka
 
 SMTP s `secure:false` zahtijeva STARTTLS, IMAP s `secure:false` također zahtijeva STARTTLS. Certifikati se provjeravaju. Zajednički sandučić koristi odvojeni servisni pristup ograničen na taj sandučić. Dopuštenje aplikacije provjerava se prije IMAP-a i SMTP-a, a SMTP servis mora odbiti slanje s adresa izvan dodijeljenog identiteta i njegovih aliasa. Onemogućite automatsko kopiranje u Poslano na pružatelju ako je uključeno, jer WebmailHR nakon potvrđene predaje sprema jednu IMAP kopiju. Kod nepoznatog SMTP ishoda ili greške pri spremanju kopije provjerite zapis servisa prije ponovne predaje.
 
+## Glavni administrator
+
+Postavite `APP_ORIGIN=https://webmailhr.com` i `ADMIN_ORIGIN=https://admin.webmailhr.com`.
+Administratorski obrazac i ploča otvaraju se na korijenu administratorske domene.
+Migracije i naredbe za račun trebaju serverski `DATABASE_URL` za istu bazu koju koristi aplikacija.
+
+- Ako glavni administrator još ne postoji, pokrenite `npm run bootstrap` uz `BOOTSTRAP_EMAIL=admin@webmailhr.com`, `BOOTSTRAP_ORG`, `BOOTSTRAP_NAME` i `BOOTSTRAP_PASSWORD`. Ako baza već ima glavnog administratora, bootstrap će odbiti stvaranje dodatnog računa.
+- Ako račun postoji, pokrenite `npm run admin:password` uz `ADMIN_PASSWORD`. `ADMIN_EMAIL` zadano je `admin@webmailhr.com`. Naredba mijenja hash aktivnog glavnog administratora na navedenoj adresi i opoziva njegove sesije i tokene za oporavak.
+- Administratorska lozinka mora imati najmanje osam znakova. Vrijednost proslijedite samo procesu kojem je potrebna i uklonite privremene varijable nakon izvršavanja. U bazi se čuva scrypt hash s nasumičnom soli.
+- Ako želite omogućiti oporavak e-poštom, potrebno je prethodno potvrditi adresu oporavka (`BOOTSTRAP_RECOVERY` za novi račun) i postaviti `RECOVERY_SENDER`. Poveznica za oporavak koristi administratorsku domenu.
+
 ## Prijava i povezivanje s izvornim računima
 
-Na `https://webmailhr.com/` jedan obrazac prima korisničko ime ili e-mail adresu. Glavni administrator koristi postojeći lokalni račun na `https://webmailhr.com/admin/prijava`. Postojeći lokalni demo računi s adresama `.test` ostaju dostupni u demo okruženju.
+Na `https://webmailhr.com/` jedan obrazac prima korisničko ime ili e-mail adresu. Glavni administrator koristi postojeći lokalni račun na `https://admin.webmailhr.com/`. Postojeći lokalni demo računi s adresama `.test` ostaju dostupni u demo okruženju.
 
 - **e-Dnevnik.** Učenik unosi postojeće korisničko ime ili školsku e-mail adresu i lozinku. Postavite `EDNEVNIK_SUPABASE_PROJECT_ID` na project ref, `EDNEVNIK_SUPABASE_URL` na HTTPS URL Supabase projekta i `EDNEVNIK_USERNAME_LOGIN_URL` na puni HTTPS URL `https://e-ocjene.skolehr.xyz/api/auth/webmail/student`. Serverski `EDNEVNIK_USERNAME_LOGIN_TOKEN` mora imati istu vrijednost kao `WEBMAILHR_STUDENT_LOGIN_TOKEN` u e-Dnevniku. Ako su potrebne dodatne školske domene, navedite ih u `EDNEVNIK_LOGIN_DOMAINS` odvojene zarezom. Prema zadanim postavkama to su `skolehr.xyz` i `eskole.me`. WebmailHR povezuje vraćeni Auth ID i project ref s aktivnim računom s dodijeljenim osobnim sandučićem `@skolehr.xyz`.
 - **FormaPoint.** Postavite `FORMAPOINT_SUPABASE_PROJECT_ID` na zaseban project ref, `FORMAPOINT_SUPABASE_URL` na njegov HTTPS URL i `FORMAPOINT_SUPABASE_AUTH_KEY` na publishable ili anon ključ toga projekta. U administraciji WebmailHR-a za račun vrste FormaPoint unesite stabilni Auth ID i e-mail kako je upisan u FormaPoint Supabase Auth. Korisnik u isti obrazac unosi taj e-mail ili svoju povezanu WebmailHR adresu. WebmailHR pronalazi spremljeni izvorni e-mail, provjerava lozinku na `/auth/v1/token?grant_type=password` i traži isti Auth ID prije izdavanja sesije. Nakon migracije dopunite izvorni e-mail na već povezanim FormaPoint računima. Dodijelite `info@formapoint.online` samo ovlaštenim djelatnicima.
@@ -64,6 +75,7 @@ U administraciji odaberite vrstu računa prije povezivanja i dodijelite potrebne
 | Domena ili adresa | Postavka |
 | --- | --- |
 | `webmailhr.com` | A/AAAA ili CNAME prema HTTPS ulazu aplikacije |
+| `admin.webmailhr.com` | A/AAAA ili CNAME prema istom HTTPS ulazu. TLS certifikat mora pokrivati i administratorsku domenu. |
 | `skolehr.xyz` | MX prema poštanskom poslužitelju. Osobni računi i zajednička `referada@skolehr.xyz` |
 | `formapoint.online` | MX za `info@formapoint.online`. `promocije@formapoint.online` kao servisni pošiljatelj |
 | `formapoint.hr` | `narudzba@formapoint.hr` za potvrde, uz Reply-To na `info@formapoint.online`. Ako ta domena prima poštu, postavite MX i dolazni alias na `info@formapoint.online` na poslužitelju |
