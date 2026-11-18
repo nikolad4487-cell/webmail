@@ -2,6 +2,7 @@ import {useEffect,useState,type FormEvent} from 'react';
 import {Building2,ClipboardList,Globe,Inbox,KeyRound,Pencil,Plus,School,Search,Send,UsersRound,X} from 'lucide-react';
 import {api,toError,type Session} from './api';
 import {accountKinds,usesUsername,type AccountKind} from './account-kinds';
+import {adminPasswordMinLength} from '../shared/admin-password.js';
 type RecordRow=Record<string,string|number|boolean|null>;
 type Field={key:string;label:string;type?:string;options?:[string,string][];optional?:boolean};
 const active={key:'active',label:'Aktivno',type:'check'};
@@ -101,7 +102,7 @@ export function Admin({session}:{session:Session}){
         if(f.type==='check')return <label className="check" key={f.key}><input name={f.key} type="checkbox" defaultChecked={typeof value==='boolean'?value:f.key!=='shared'}/>{f.label}</label>;
         if(f.type==='school')return <label key={f.key}>{f.label}<select name={f.key} defaultValue={String(value??'')}><option value="">Bez odabira</option>{schools.filter(x=>!org||String(x.org)===org).map(x=><option key={String(x.id)} value={String(x.id)}>{x.name}</option>)}</select></label>;
         if(f.options)return <label key={f.key}>{f.label}<select name={f.key} defaultValue={String(value??f.options[0][0])}>{f.options.filter(x=>root||f.key!=='role'||x[0]==='user').map(([key,label])=><option key={key} value={key}>{label}</option>)}</select></label>;
-        return <label key={f.key}>{f.label}<input name={f.key} type={f.type||'text'} defaultValue={String(value??(f.key==='target_quota_gb'?15:''))} required={f.key==='source_user_id'||(!f.optional&&!(f.key==='password'&&!!edit.id&&edit.auth_kind==='local'))} minLength={f.key==='password'?12:undefined}/></label>;
+        return <label key={f.key}>{f.label}<input name={f.key} type={f.type||'text'} defaultValue={String(value??(f.key==='target_quota_gb'?15:''))} required={f.key==='source_user_id'||(!f.optional&&!(f.key==='password'&&!!edit.id&&edit.auth_kind==='local'))} minLength={f.key==='password'?adminPasswordMinLength:undefined}/></label>;
       })}{error&&<p className="error">{error}</p>}<button className="primary">Spremi</button>
     </form></section></div>}
     {pin!==undefined&&<div className="modal-backdrop"><section className="modal" role="dialog" aria-modal="true" aria-labelledby="staff-pin-title"><div className="reader-heading"><h2 id="staff-pin-title">Nova lozinka djelatnika</h2></div><p>Lozinka se prikazuje samo sada. Predajte je djelatniku sigurnim kanalom.</p><output className="staff-pin">{pin}</output><button className="primary" onClick={()=>setPin(undefined)}>Zatvori</button></section></div>}

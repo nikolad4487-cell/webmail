@@ -1,12 +1,13 @@
 import {z} from 'zod';
 import {db,digest,hashPassword,transaction} from '../server/db';
+import {adminPasswordMinLength} from '../shared/admin-password.js';
 
 try {
   const input=z.object({
     ADMIN_RESET_EMAIL:z.string().trim().toLowerCase().email(),
-    ADMIN_RESET_PASSWORD:z.string().min(16).max(512),
+    ADMIN_RESET_PASSWORD:z.string().min(adminPasswordMinLength).max(512),
   }).safeParse(process.env);
-  if(!input.success) throw new Error('Postavite ADMIN_RESET_EMAIL i novu lozinku od najmanje 16 znakova.');
+  if(!input.success) throw new Error(`Postavite ADMIN_RESET_EMAIL i novu lozinku od najmanje ${adminPasswordMinLength} znakova.`);
   const {ADMIN_RESET_EMAIL:address,ADMIN_RESET_PASSWORD:password}=input.data;
   const hash=await hashPassword(password);
   await transaction(async client=>{

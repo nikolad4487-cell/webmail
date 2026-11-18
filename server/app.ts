@@ -6,6 +6,7 @@ import {addressing,append,archiveDraft,demo,folder,HttpError,imap,listing,messag
 import {email,id,user,deny} from './http.js';
 import {setupData} from './workspace.js';
 import {setupAutomation} from './automation.js';
+import {adminPasswordMinLength} from '../shared/admin-password.js';
 
 const app=express(), api=express.Router(), production=process.env.NODE_ENV==='production';
 const origin=process.env.APP_ORIGIN || (production?'https://webmailhr.com':'');
@@ -124,7 +125,7 @@ api.post('/recover',async (req,res)=>{
 api.post('/reset',async (req,res)=>{
   if(adminHost && !onAdminHost(req)) throw new HttpError(404,'Radnja nije pronađena.');
   await limit('reset:'+req.ip,12);
-  const input=z.object({key:z.string().regex(/^[a-f0-9]{64}$/),password:z.string().min(12).max(512)}).parse(req.body);
+  const input=z.object({key:z.string().regex(/^[a-f0-9]{64}$/),password:z.string().min(adminPasswordMinLength).max(512)}).parse(req.body);
   const secret=await hashPassword(input.password);
   await transaction(async client=>{
     const {rows:[reset]}=await client.query('delete from resets where token=$1 and expires>now() returning uid',[digest(input.key)]);

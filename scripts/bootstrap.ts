@@ -1,6 +1,7 @@
 import {z} from 'zod';
 import {db,hashPassword,transaction} from '../server/db';
 import {addressing,demo} from '../server/mail';
+import {adminPasswordMinLength} from '../shared/admin-password.js';
 
 try{
   if(demo) throw new Error('Za lokalne račune koristite npm run seed.');
@@ -8,7 +9,7 @@ try{
     BOOTSTRAP_ORG:z.string().trim().min(1).max(240),
     BOOTSTRAP_NAME:z.string().trim().min(1).max(240),
     BOOTSTRAP_EMAIL:z.string().trim().toLowerCase().email(),
-    BOOTSTRAP_PASSWORD:z.string().min(16).max(512),
+    BOOTSTRAP_PASSWORD:z.string().min(adminPasswordMinLength).max(512),
     BOOTSTRAP_RECOVERY:z.string().trim().toLowerCase().email().optional(),
   }).safeParse(process.env);
   if(!input.success) throw new Error('Nedostaju valjane varijable BOOTSTRAP_*.');

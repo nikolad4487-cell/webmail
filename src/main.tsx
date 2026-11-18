@@ -5,6 +5,7 @@ import {api,initials,toError,type Session} from './api';
 import {Mailbox} from './mailbox';
 import {Calendar,Contacts} from './organizer';
 import {Admin} from './admin';
+import {adminPasswordMinLength} from '../shared/admin-password.js';
 import './style.css';
 
 function Brand(){return <span className="brand"><span className="brand-icon"><Mail size={22}/></span>Webmail<span>HR</span></span>}
@@ -37,11 +38,11 @@ function Login({onLogin,demo}:{onLogin:()=>Promise<void>;demo:boolean}){
   return <div className="login-page"><div className="login-shell"><Brand/><section className="login-card">
     <div className="login-symbol"><ShieldCheck size={24}/></div>
     <h1>{mode==='login'?(adminLogin?'Prijava administratora':'Prijava'):mode==='recover'?'Oporavak lozinke':'Nova lozinka'}</h1>
-    <p className="muted">{mode==='login'?'Pristupite svojim sandučićima i kalendaru.':mode==='recover'?'Unesite adresu svojeg računa.':'Odaberite lozinku od najmanje 12 znakova.'}</p>
+    <p className="muted">{mode==='login'?'Pristupite svojim sandučićima i kalendaru.':mode==='recover'?'Unesite adresu svojeg računa.':`Odaberite lozinku od najmanje ${adminPasswordMinLength} znakova.`}</p>
     <form onSubmit={submit}>
       {mode==='login'&&<label>{adminLogin?'E-mail adresa':'Korisničko ime ili e-mail adresa'}<input type={adminLogin?'email':'text'} name="identifier" autoComplete="username" maxLength={254} required/></label>}
       {mode==='recover'&&<label>E-mail adresa<input type="email" name="email" autoComplete="username" required/></label>}
-      {mode!=='recover'&&<label>{mode==='reset'?'Nova lozinka':'Lozinka'}<span className="password"><input key={mode} type={visible?'text':'password'} name="password" placeholder="Unesite lozinku" autoComplete={mode==='reset'?'new-password':'current-password'} maxLength={512} minLength={mode==='reset'?12:1} required/><button type="button" className="icon ghost" aria-label={visible?'Sakrij lozinku':'Prikaži lozinku'} onClick={()=>setVisible(!visible)}>{visible?<EyeOff size={18}/>:<Eye size={18}/>}</button></span></label>}
+      {mode!=='recover'&&<label>{mode==='reset'?'Nova lozinka':'Lozinka'}<span className="password"><input key={mode} type={visible?'text':'password'} name="password" placeholder="Unesite lozinku" autoComplete={mode==='reset'?'new-password':'current-password'} maxLength={512} minLength={mode==='reset'?adminPasswordMinLength:1} required/><button type="button" className="icon ghost" aria-label={visible?'Sakrij lozinku':'Prikaži lozinku'} onClick={()=>setVisible(!visible)}>{visible?<EyeOff size={18}/>:<Eye size={18}/>}</button></span></label>}
       {mode==='login'&&<div className="login-options"><label className="check"><input type="checkbox" name="remember"/> Zapamti me</label>{adminLogin&&<button type="button" className="link" onClick={()=>{setMode('recover');setError('');setNotice('');}}>Zaboravljena lozinka?</button>}</div>}
       {error&&<p className="error" role="alert">{error}</p>}{notice&&<p className="notice">{notice}</p>}
       <button className="primary" disabled={busy}>{busy?'Pričekajte…':mode==='login'?'Prijavi se':mode==='recover'?'Pošalji poveznicu':'Spremi lozinku'}</button>
