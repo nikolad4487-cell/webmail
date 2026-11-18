@@ -57,6 +57,21 @@ Dodijelite `webmailhr.com` i `admin.webmailhr.com` istom projektu. U produkcijsk
 postavkama projekta postavite serverski `DATABASE_URL`, `APP_ORIGIN` i
 `ADMIN_ORIGIN`, primijenite migracije na ciljnu bazu i ponovno objavite projekt.
 
+Ako lokalna mreža ne može otvoriti PostgreSQL port, migraciju može izvršiti
+jedna produkcijska objava na Vercelu:
+
+1. Na postojećem projektu u **Settings → Environment Variables** provjerite
+   da `DATABASE_URL` pokazuje na produkcijsku bazu WebmailHR-a. Ako aplikacijska
+   uloga nema DDL ovlasti, privremeno dodajte serverski `MIGRATION_DATABASE_URL`
+   s ovlastima za migraciju iste baze.
+2. Samo za **Production** postavite `WEBMAIL_MIGRATE_ON_BUILD=1`. Izgradnja koristi
+   Vercelovu sistemsku varijablu `VERCEL_ENV` za provjeru okruženja.
+3. U **Deployments** ponovno objavite produkcijsku verziju s ovom konfiguracijom,
+   bez build cachea. U logu potražite `WebmailHR: migracije su primijenjene.`, a
+   zatim provjerite [status baze](https://admin.webmailhr.com/api/health).
+4. Uklonite privremeni `WEBMAIL_MIGRATE_ON_BUILD` i, ako ste je dodali,
+   `MIGRATION_DATABASE_URL`. Zadržite produkcijski `DATABASE_URL` za aplikaciju.
+
 Ako koristite i `www.webmailhr.com`, dodijelite je istom projektu. Obje javne
 domene prihvaćaju prijavu s vlastitog HTTPS podrijetla. Zahtjev s jedne domene
 na drugu i dalje se odbija. Reverse proxy treba sačuvati izvorni `Host`.

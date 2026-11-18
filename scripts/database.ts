@@ -1,6 +1,10 @@
 import { readFile } from 'node:fs/promises';
-import { db } from '../server/db';
+import { db, transaction } from '../server/db.js';
 try {
   if (!process.env.DATABASE_URL?.trim()) throw new Error("DATABASE_URL nije postavljen.");
-  await db.query(await readFile(new URL('../server/schema.sql', import.meta.url), 'utf8'));
+  const schema=await readFile(new URL('../server/schema.sql', import.meta.url), 'utf8');
+  await transaction(async client=>{
+    await client.query("select pg_advisory_xact_lock(hashtext('webmailhr.schema'))");
+    await client.query(schema);
+  });
 } finally { await db.end(); }
