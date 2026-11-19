@@ -5,3 +5,5 @@ dist/
 *.log
 
 .quota-demo/
+.prisma-composer/
+.alchemy/
