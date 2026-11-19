@@ -31,6 +31,10 @@
   },
   "homepage": "https://github.com/nikolad4487-cell/webmail#readme",
   "dependencies": {
+    "@prisma/composer": "0.38.0",
+    "@prisma/composer-prisma-cloud": "0.38.0",
+    "@prisma/orm-postgres": "8.0.0-rc.23",
+    "effect": "4.0.5",
     "express": "^5.3.0",
     "imapflow": "^2.12.1",
     "lucide-react": "^1.75.0",
@@ -51,6 +55,7 @@
     "@types/pg": "^8.23.1",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
+    "prisma": "8.0.0-rc.33",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2",
     "vite": "^8.3.8"
@@ -58,5 +63,12 @@
   "private": true,
   "engines": {
     "node": ">=22.12"
+  },
+  "overrides": {
+    "@effect/platform-bun": "4.0.5",
+    "@effect/platform-node": "4.0.5",
+    "@effect/platform-node-shared": "4.0.5",
+    "@effect/vitest": "4.0.5",
+    "effect": "4.0.5"
   }
 }
