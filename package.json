@@ -16,7 +16,8 @@
     "directory:sync": "tsx scripts/sync-directory.ts",
     "test:native": "node --import tsx --test tests/native/*.mjs",
     "native:pilot": "tsx scripts/native-pilot.ts",
-    "inbound:probe": "tsx scripts/inbound-probe.ts"
+    "inbound:probe": "tsx scripts/inbound-probe.ts",
+    "test:migration": "node --import tsx --test tests/migration/*.mjs"
   },
   "repository": {
     "type": "git",

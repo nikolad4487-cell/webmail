@@ -1,3 +1,4 @@
+import {migrationFailureMessage} from './migration-diagnostics.js';
 if(process.env.WEBMAIL_MIGRATE_ON_BUILD==='1'){
   if(process.env.VERCEL_ENV!=='production'){
     console.log('WebmailHR: migracija je preskočena izvan produkcijske objave.');
@@ -12,9 +13,7 @@ if(process.env.WEBMAIL_MIGRATE_ON_BUILD==='1'){
         await import('./database.js');
         console.log('WebmailHR: migracije su primijenjene.');
       }catch(error){
-        const code=error instanceof Error && 'code' in error && typeof error.code==='string' &&
-          /^[A-Z0-9_]+$/.test(error.code) ? ` (${error.code})` : '';
-        console.error(`WebmailHR: migracija nije uspjela${code}. Provjerite vezu i ovlasti PostgreSQL korisnika.`);
+        console.error(migrationFailureMessage(error));
         process.exitCode=1;
       }
     }
