@@ -6,5 +6,6 @@ try {
   await transaction(async client=>{
     await client.query("select pg_advisory_xact_lock(hashtext('webmailhr.schema'))");
     await client.query(schema);
+    await client.query(await readFile(new URL('../migrations/001-native-mail.sql', import.meta.url),'utf8'));
   });
 } finally { await db.end(); }

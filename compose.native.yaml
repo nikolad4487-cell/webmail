@@ -1,0 +1,14 @@
+# Local disposable test DB only. No mail server and no VPS required.
+services:
+  native-test-db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: webmail
+      POSTGRES_PASSWORD: local-native-only
+      POSTGRES_DB: webmail_native_test
+    ports: ["127.0.0.1:55433:5432"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U webmail -d webmail_native_test"]
+      interval: 2s
+      timeout: 3s
+      retries: 25

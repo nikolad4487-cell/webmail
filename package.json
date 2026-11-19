@@ -13,7 +13,10 @@
     "bootstrap": "tsx scripts/bootstrap.ts",
     "admin:password": "tsx scripts/admin-password.ts",
     "build:vercel": "npm run build && tsx scripts/vercel-migrate.ts && tsx scripts/vercel-admin.ts && tsx scripts/vercel-directory.ts",
-    "directory:sync": "tsx scripts/sync-directory.ts"
+    "directory:sync": "tsx scripts/sync-directory.ts",
+    "test:native": "node --import tsx --test tests/native/*.mjs",
+    "native:pilot": "tsx scripts/native-pilot.ts",
+    "inbound:probe": "tsx scripts/inbound-probe.ts"
   },
   "repository": {
     "type": "git",

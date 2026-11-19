@@ -1,3 +1,5 @@
+import {setupInbound} from './inbound.js';
+import {isNative,changeNative,MAX_NATIVE_BYTES} from './native-mail.js';
 import {invalidLogin,staffSecret,verifyFormaPoint,verifyStudent} from './identity.js';
 import express, {type Request,type Response} from 'express';
 import {z, ZodError} from 'zod';
@@ -36,6 +38,7 @@ app.use((_req,res,next)=>{
   res.set({'X-Content-Type-Options':'nosniff','Referrer-Policy':'no-referrer','X-Frame-Options':'DENY'});
   next();
 });
+setupInbound(app,host=>publicHosts.has(host)||(!production&&!origin&&host.startsWith('127.0.0.1:')));
 app.use('/api',express.json({limit:'17mb'}),(_req,res,next)=>{res.set('Cache-Control','no-store');next();},api);
 api.use((req,_res,next)=>{
   if (!['GET','HEAD','OPTIONS'].includes(req.method) && req.get('origin')) {
@@ -228,7 +231,8 @@ api.get('/mail/:box/attachment',async(req,res)=>{
 api.patch('/mail/:box/message',async(req,res)=>{
   const m=await box(req),{path,id:uid}=location.parse(req.body);
   const change=z.object({flag:z.enum(['read','star']),value:z.boolean()}).parse(req.body);
-  await imap(m.address,async client=>{
+  if(await isNative(m.address))await changeNative(m.address,path,uid,change);
+  else await imap(m.address,async client=>{
     const lock=await client.getMailboxLock(path);
     try{
       const flag=change.flag==='star'?'\\Flagged':'\\Seen';
@@ -241,7 +245,8 @@ api.patch('/mail/:box/message',async(req,res)=>{
 api.post('/mail/:box/move',async(req,res)=>{
   const m=await box(req,true),{path,id:uid}=location.parse(req.body);
   const destination=z.enum(['inbox','junk','trash']).parse(req.body.destination);
-  await imap(m.address,async client=>{
+  if(await isNative(m.address))await changeNative(m.address,path,uid,{destination});
+  else await imap(m.address,async client=>{
     const target=(await folder(client,destination,true))!;
     if(path===target) return;
     const lock=await client.getMailboxLock(path);
@@ -260,6 +265,7 @@ api.post('/mail/:box/send',async(req,res)=>{
   }
   const mail:Outgoing={...input,attachments:input.attachments?.map(x=>({filename:x.filename,content:Buffer.from(x.data,'base64')}))};
   const raw=await mime(mail);
+  if(await isNative(m.address) && raw.length>MAX_NATIVE_BYTES)throw new HttpError(413,'Poruka prelazi ograničenje od 3 MB.');
   async function retireDraft(){
     if(input.draftId===undefined) return false;
     try{await archiveDraft(m.address,input.draftId);return false;}
@@ -276,6 +282,7 @@ api.post('/mail/:box/send',async(req,res)=>{
     throw new HttpError(502,'SMTP predaja nije potvrđena. Provjerite zapis servisa prije ponovnog slanja.');
   }
   const warnings=[];
+  if('sandbox' in result && result.sandbox)warnings.push('Mailjet probni način: poruka je provjerena, ali nije stvarno poslana.');
   try{await append(m.address,'sent',raw);}
   catch{warnings.push('Poruka je predana, ali kopija nije spremljena u Poslano.');}
   if(await retireDraft())warnings.push('Staru skicu uklonite ručno.');
