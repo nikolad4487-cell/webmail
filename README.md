@@ -271,6 +271,16 @@ jedna produkcijska objava na Vercelu:
 4. Uklonite privremeni `WEBMAIL_MIGRATE_ON_BUILD` i, ako ste je dodali,
    `MIGRATION_DATABASE_URL`. Zadržite produkcijski `DATABASE_URL` za aplikaciju.
 
+Ako build prijavi `42501`, nova dijagnostika ispisuje **Korak** i prepoznati
+objekt za koji nedostaje ovlast, bez connection stringa, SQL-a ili tajni.
+`zaključavanje migracije` znači da prvo treba provjeriti dopušta li servis
+`pg_advisory_xact_lock`; migracija tada nije stigla do promjena tablica.
+`osnovna shema` ili `pohrana poruka i privitaka` znači da treba provjeriti
+ovlasti nad navedenom shemom/tablicom i koristiti `MIGRATION_DATABASE_URL`
+s ovlastima vlasnika iste baze. Sam pooled/direct način povezivanja ne jamči
+te ovlasti. Ne gasite migraciju samo kako bi build prošao dok shema nedostaje.
+Lokalne provjere dijagnostike: `npm run test:migration`.
+
 Ako koristite i `www.webmailhr.com`, dodijelite je istom projektu. Obje javne
 domene prihvaćaju prijavu s vlastitog HTTPS podrijetla. Zahtjev s jedne domene
 na drugu i dalje se odbija. Reverse proxy treba sačuvati izvorni `Host`.
