@@ -107,6 +107,10 @@ test('Odgovor preko probnog Mailjeta i kopija u Poslano',async()=>{
   assert.equal(Buffer.from(msg.Attachments[0].Base64Content,'base64').toString(),'Reply attachment');
   assert.equal(sent[0].authorization,'Basic '+Buffer.from('local-key:local-secret').toString('base64'));
   const copies=(await request('/mail/'+box+'?folder=sent')).body;assert.equal(copies.length,1);assert.equal(copies[0].inReplyTo,'<native-pilot@example.test>');
+  const sentLocation=new URLSearchParams({id:copies[0].id,path:copies[0].path});
+  const saved=(await request('/mail/'+box+'/message?'+sentLocation)).body;
+  assert.equal(saved.text.trim(),'Odgovor.');assert.equal(saved.attachments[0].name,'odgovor.txt');
+  assert.equal((await request('/mail/'+box+'/attachment?'+sentLocation+'&index=0')).body,'Reply attachment');
   jetFailure=true;
   await request('/mail/'+box+'/send',{body:{from:'demo@skolehr.xyz',to:['sender@example.test'],subject:'Fail',text:'Fail'},status:502});
   jetFailure=false;assert.equal((await request('/mail/'+box+'?folder=sent')).body.length,1);
