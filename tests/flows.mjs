@@ -233,7 +233,7 @@ test('Generirana lozinka djelatnika, ograničenje pokušaja i opoziv sesije',asy
   await request('/admin/access/'+referada.id,{cookie:admin,method:'PUT',body:{kind:'grant',uid:staff.id,remove:false,can_send:false,can_calendar:false}});
   const pinUrl='/admin/users/'+staff.id+'/pin';
   const {body:first}=await request(pinUrl,{cookie:admin,method:'POST'});
-  assert.match(first.pin,/^[A-Za-z0-9_-]{24}$/);
+  assert.match(first.pin,/^[0-9]{8}$/);
   const staffLogin=(password,status=200)=>request('/login',{body:{identifier:email,password},status});
   const {cookie}=await staffLogin(first.pin);
   await request('/login',{body:{identifier:'lena@formapoint.test',password:'Webmail-Test-2026'},status:401});
@@ -245,7 +245,7 @@ test('Generirana lozinka djelatnika, ograničenje pokušaja i opoziv sesije',asy
   for(let i=0;i<6;i++)await staffLogin('1234567',401);
   await staffLogin(first.pin,429);
   const {body:second}=await request(pinUrl,{cookie:admin,method:'POST'});
-  assert.match(second.pin,/^[A-Za-z0-9_-]{24}$/);
+  assert.match(second.pin,/^[0-9]{8}$/);
   assert.notEqual(second.pin,first.pin);
   await request('/me',{cookie,status:401});
   await staffLogin(first.pin,401);

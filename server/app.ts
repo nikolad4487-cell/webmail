@@ -177,7 +177,7 @@ api.post('/reset',async (req,res)=>{
   await transaction(async client=>{
     const {rows:[reset]}=await client.query('delete from resets where token=$1 and expires>now() returning uid',[digest(input.key)]);
     if(!reset) throw new HttpError(400,'Poveznica je istekla ili nije valjana.');
-    const updated=await client.query("update users set password=$3 where id=$1 and active and auth_kind='local' and "+localAccount+" and (role='root' or $4::boolean)",[reset.uid,demo,secret,input.password.length>=12]);
+    const updated=await client.query("update users set password=$3 where id=$1 and active and auth_kind='local' and "+localAccount+" and (role='root' or $4::boolean)",[reset.uid,demo,secret,input.password.length>=8]);
     if(!updated.rowCount) throw new HttpError(400,'Poveznica je istekla ili nije valjana.');
     await client.query('delete from sessions where uid=$1',[reset.uid]);
     await client.query('delete from resets where uid=$1',[reset.uid]);

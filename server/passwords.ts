@@ -1,10 +1,10 @@
-import {randomBytes} from 'node:crypto';
+import {randomInt} from 'node:crypto';
 import {z} from 'zod';
 import {verifyPassword} from './db.js';
 import {staffSecret,verifyFormaPoint} from './identity.js';
 
-export const newPassword=z.string().min(12,'Lozinka mora imati najmanje 12 znakova.').max(512);
-export const generatePassword=()=>randomBytes(18).toString('base64url');
+export const newPassword=z.string().min(8,'Lozinka mora imati najmanje 8 znakova.').max(512);
+export const generatePassword=()=>String(randomInt(100_000_000)).padStart(8,'0');
 export type PasswordAccount={auth_kind:string;password:string|null;password_scheme:string;source_project:string|null;source_user_id:string|null;source_email:string|null};
 export async function matchesPassword(account:PasswordAccount,value:string){
   if(!account.password)return false;

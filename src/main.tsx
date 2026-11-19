@@ -20,7 +20,7 @@ function Login({onLogin,settings,initialNotice=''}:{onLogin:()=>Promise<void>;se
   const [mode,setMode]=useState(reset?'reset':'login'),[visible,setVisible]=useState(false);
   const {demo,adminSite,adminUrl,publicUrl}=settings;
   const adminLogin=adminSite || location.pathname==='/admin/prijava' || !!reset;
-  const passwordMinimum=adminSite?8:12;
+  const passwordMinimum=8;
   const [error,setError]=useState(''),[notice,setNotice]=useState(initialNotice),[busy,setBusy]=useState(false);
   async function submit(event:FormEvent<HTMLFormElement>){
     event.preventDefault();

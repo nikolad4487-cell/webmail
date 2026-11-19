@@ -223,7 +223,7 @@ export function setupData(api:Router){
           const allowed=input.role==='root' || (demo && address.endsWith('.test'));
           if(!allowed && (!current || current.auth_kind!=='local' || input.password)) throw new HttpError(400,'Odaberite vrstu prijave za ovog korisnika.');
           if(typeof input.password==='string'){
-            if(input.role!=='root' && input.password.length<12) throw new HttpError(400,'Lozinka mora imati najmanje 12 znakova.');
+            if(input.role!=='root' && input.password.length<8) throw new HttpError(400,'Lozinka mora imati najmanje 8 znakova.');
             input.password=await hashPassword(input.password);
           }
           else if(!current?.password || current.auth_kind!=='local') throw new HttpError(400,'Unesite početnu lozinku.');
