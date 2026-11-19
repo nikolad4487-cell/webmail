@@ -1,0 +1,12 @@
+{
+  "name": "webmailhr-inbound",
+  "main": "email-worker.mjs",
+  "compatibility_date": "2026-11-19",
+  "workers_dev": false,
+  "vars": {
+    "INBOUND_URL": "https://webmailhr.com/api/inbound/cloudflare",
+    "ENABLED_RECIPIENTS": "demo@skolehr.xyz"
+  }
+  // Secret: npx wrangler secret put INBOUND_SECRET --config cloudflare/wrangler.jsonc
+  // No HTTP route, catch-all, DNS or MX changes in this configuration.
+}

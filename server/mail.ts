@@ -1,3 +1,5 @@
+import {isNative,nativeListing,nativeMessage,nativePaths,nativeQuota,storeNative,changeNative} from './native-mail.js';
+import {sendMailjet} from './mailjet.js';
 import { readFileSync } from 'node:fs';
 import { ImapFlow, type SearchObject } from 'imapflow';
 import nodemailer from 'nodemailer';
@@ -15,6 +17,7 @@ export class HttpError extends Error {
   constructor(public status: number, message: string) { super(message); }
 }
 export async function endpoint(address: string, protocol: 'imap' | 'smtp') {
+  if(await isNative(address))throw new HttpError(409,'Sandučić koristi HTTPS pohranu i Mailjet.');
   const domain = addressing(address);
   const {rows} = await db.query('select inbound,outbound from domains where name=$1', [domain]);
   if (!rows[0]?.[protocol === 'imap' ? 'inbound' : 'outbound']) throw new HttpError(409, 'Protokol nije omogućen za ovu domenu.');
@@ -51,10 +54,12 @@ export async function folder(client: ImapFlow, key: string, create = false): Pro
   if (create) { await client.mailboxCreate(fallback); return fallback; }
 }
 export async function quotaFor(address:string) {
+  if(await isNative(address))return nativeQuota(address);
   const quota=await imap(address,async client=>client.capabilities.has('QUOTA')?client.getQuota('INBOX'):false);
   return {used:quota ? quota.storage?.usage ?? null : null,limit:quota ? quota.storage?.limit ?? null : null};
 }
 export async function listing(address: string, key: string, query: string) {
+  if(await isNative(address))return nativeListing(address,key,query);
   return imap(address, async client => {
     const folders = key==='starred' ? await client.list() : [];
     const path = key==='starred' ? undefined : await folder(client,key);
@@ -77,6 +82,7 @@ export async function listing(address: string, key: string, query: string) {
   });
 }
 export async function message(address: string, path: string, id: number, markRead = false) {
+  if(await isNative(address))return nativeMessage(address,path,id,markRead);
   return imap(address, async client => {
     const lock = await client.getMailboxLock(path);
     try {
@@ -96,6 +102,11 @@ export async function mime(input: Outgoing) {
   return (await nodemailer.createTransport({streamTransport:true,buffer:true,newline:'windows',disableFileAccess:true,disableUrlAccess:true}).sendMail(input)).message as Buffer;
 }
 export async function smtp(account: string, input: Outgoing, raw: Buffer) {
+  if(await isNative(account)){
+    const {rows:[domain]}=await db.query('select outbound from domains where name=$1',[addressing(account)]);
+    if(!domain?.outbound)throw new HttpError(409,'Slanje nije omogućeno za domenu.');
+    return sendMailjet(account,input);
+  }
   const {host,port,user,password,secure=false} = await endpoint(account,'smtp');
   const transport = nodemailer.createTransport({host,port,secure,tls,requireTLS:!secure&&!demo,auth:{user,pass:password},connectionTimeout:8000,socketTimeout:25000,disableFileAccess:true,disableUrlAccess:true});
   if (demo && input.to.some(x=>!x.endsWith('.test'))) throw new HttpError(400,'Probno slanje dopušteno je samo na .test adrese.');
@@ -103,6 +114,7 @@ export async function smtp(account: string, input: Outgoing, raw: Buffer) {
   return {accepted:result.accepted.length,rejected:result.rejected.length};
 }
 export async function archiveDraft(address:string,uid:number) {
+  if(await isNative(address))return changeNative(address,'Drafts',uid,{destination:'trash'});
   return imap(address,async client=>{
     const path=await folder(client,'drafts');
     if(!path) return;
@@ -115,6 +127,7 @@ export async function archiveDraft(address:string,uid:number) {
   });
 }
 export async function append(address: string, key: 'sent'|'drafts', raw: Buffer) {
+  if(await isNative(address))return storeNative(address,nativePaths[key],raw);
   return imap(address, async client => {
     const path = (await folder(client,key,true))!;
     return client.append(path,raw,key==='sent'?['\\Seen']:['\\Draft']);
@@ -122,6 +135,7 @@ export async function append(address: string, key: 'sent'|'drafts', raw: Buffer)
 }
 
 export async function applyMailcowQuota(address:string, gib:number){
+  if(await isNative(address))throw new HttpError(409,'HTTPS pohrana koristi NATIVE_MAILBOX_BYTES, bez Mailcow servisa.');
   const host=process.env.MAILCOW_URL, key=process.env.MAILCOW_API_KEY;
   if(!host || !key) throw new HttpError(503,'Upravljanje kvotom na poštanskom servisu nije konfigurirano.');
   const url=new URL('/api/v1/edit/mailbox',host);
