@@ -8,6 +8,7 @@ const objects:Record<string,string>={schema:'shema',table:'tablica',sequence:'se
 // driver messages, SQL text, connection strings, error detail or server context.
 export function permissionDiagnostic(error:unknown){
   const message=error instanceof Error?error.message:'';
+  if(message==='restricted superuser cannot grant or revoke privileges')return 'Servis zabranjuje GRANT/REVOKE za ovu ulogu.';
   const denied=/^permission denied for (schema|table|sequence|function|database|relation) ([a-zA-Z_][a-zA-Z0-9_.]*)(?:\(\))?$/.exec(message);
   if(denied)return `Nedostaje ovlast: ${objects[denied[1]]} ${denied[2]}.`;
   const owner=/^must be owner of (table|sequence|function|database|relation|schema) ([a-zA-Z_][a-zA-Z0-9_.]*)$/.exec(message);

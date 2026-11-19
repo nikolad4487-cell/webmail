@@ -13,6 +13,7 @@ test('Distinguishes denied advisory lock, base schema and native schema without 
   }
 });
 test('Reports recognized permission targets and ownership with a suitable next step',()=>{
+  assert.match(migrationFailureMessage(new MigrationFailure('native',denied('restricted superuser cannot grant or revoke privileges'))),/Servis zabranjuje GRANT\/REVOKE/);
   const lock=migrationFailureMessage(new MigrationFailure('lock',denied('permission denied for function pg_advisory_xact_lock')));
   assert.match(lock,/funkcija pg_advisory_xact_lock/);assert.match(lock,/Migracija nije pokrenuta/);
   const owner=migrationFailureMessage(new MigrationFailure('native',denied('must be owner of table mailboxes')));

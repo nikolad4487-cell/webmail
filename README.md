@@ -271,6 +271,14 @@ jedna produkcijska objava na Vercelu:
 4. Uklonite privremeni `WEBMAIL_MIGRATE_ON_BUILD` i, ako ste je dodali,
    `MIGRATION_DATABASE_URL`. Zadržite produkcijski `DATABASE_URL` za aplikaciju.
 
+Prisma Postgres može odbiti bezuvjetni `REVOKE` porukom
+`restricted superuser cannot grant or revoke privileges`. Native migracija zato
+prvo provjerava postoji li stvarna PUBLIC dodjela. Ako je nema, ne izvršava
+nepotreban REVOKE; ako postoji, a servis zabrani njegovo izvršavanje, migracija
+se zaustavlja. RLS ostaje uključen. Za postojeću Prisma serversku ulogu
+`prisma_application` kreiraju se zasebna pravila, uz providerove dodjele
+ovlasti; ovlasti krajnjih korisnika i dalje provjerava WebmailHR API.
+
 Ako build prijavi `42501`, nova dijagnostika ispisuje **Korak** i prepoznati
 objekt za koji nedostaje ovlast, bez connection stringa, SQL-a ili tajni.
 `zaključavanje migracije` znači da prvo treba provjeriti dopušta li servis
