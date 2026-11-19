@@ -1,6 +1,7 @@
+import {ChangePassword} from './password';
 import {useEffect,useState,type FormEvent} from 'react';
 import {createRoot} from 'react-dom/client';
-import {CalendarDays,ChevronDown,Eye,EyeOff,LogOut,Mail,Settings,UsersRound,ArrowLeft,ShieldCheck} from 'lucide-react';
+import {CalendarDays,ChevronDown,Eye,EyeOff,LogOut,Mail,Settings,UsersRound,ArrowLeft,ShieldCheck,KeyRound} from 'lucide-react';
 import {api,initials,toError,type Session} from './api';
 import {Mailbox} from './mailbox';
 import {Calendar,Contacts} from './organizer';
@@ -14,13 +15,13 @@ const fallbackSettings:LoginSettings={
   demo:false,adminSite:location.hostname==='admin.webmailhr.com',
   adminUrl:'https://admin.webmailhr.com',publicUrl:'https://webmailhr.com',
 };
-function Login({onLogin,settings}:{onLogin:()=>Promise<void>;settings:LoginSettings}){
+function Login({onLogin,settings,initialNotice=''}:{onLogin:()=>Promise<void>;settings:LoginSettings;initialNotice?:string}){
   const reset=new URLSearchParams(location.search).get('reset');
   const [mode,setMode]=useState(reset?'reset':'login'),[visible,setVisible]=useState(false);
   const {demo,adminSite,adminUrl,publicUrl}=settings;
   const adminLogin=adminSite || location.pathname==='/admin/prijava' || !!reset;
   const passwordMinimum=adminSite?8:12;
-  const [error,setError]=useState(''),[notice,setNotice]=useState(''),[busy,setBusy]=useState(false);
+  const [error,setError]=useState(''),[notice,setNotice]=useState(initialNotice),[busy,setBusy]=useState(false);
   async function submit(event:FormEvent<HTMLFormElement>){
     event.preventDefault();
     const input=new FormData(event.currentTarget);
@@ -59,7 +60,8 @@ const navigation=[{key:'mail',label:'Pošta',path:'/',icon:Mail},{key:'calendar'
 const getPage=(adminSite=false)=>navigation.slice(1).find(x=>location.pathname.startsWith(x.path))?.key||(adminSite?'admin':'mail');
 function App(){
   const [session,setSession]=useState<Session|null>(null),[loading,setLoading]=useState(true),[settings,setSettings]=useState<LoginSettings>(fallbackSettings),[page,setPage]=useState(()=>getPage(fallbackSettings.adminSite)),[accountOpen,setAccountOpen]=useState(false),[recipient,setRecipient]=useState('');
-  async function load(){setSession(await api<Session>('/me'));}
+  const [changePassword,setChangePassword]=useState(false),[loginNotice,setLoginNotice]=useState('');
+  async function load(){setSession(await api<Session>('/me'));setLoginNotice('');}
   useEffect(()=>{
     Promise.allSettled([api<LoginSettings>('/login-settings'),load()]).then(([result])=>{
       if(result.status==='fulfilled'){
@@ -78,14 +80,15 @@ function App(){
     history.pushState(null,'',navigation.find(x=>x.key===key)!.path);setPage(key);setAccountOpen(false);
   }
   if(loading)return <div className="loading"><Brand/></div>;
-  if(!session)return <Login settings={settings} onLogin={load}/>;
+  if(!session)return <Login settings={settings} onLogin={load} initialNotice={loginNotice}/>;
   return <div className="application"><header className="topbar">
     <a href="/" onClick={e=>{e.preventDefault();open(settings.adminSite?'admin':'mail');}}><Brand/></a>
     <nav aria-label="Glavna navigacija">{navigation.filter(x=>settings.adminSite?x.key==='admin':x.key!=='admin').map(({key,label,icon:Icon})=><button key={key} className={page===key?'active':''} onClick={()=>open(key)}><Icon size={18}/>{label}</button>)}</nav>
     <div className="account"><button className="account-button" onClick={()=>setAccountOpen(!accountOpen)} aria-expanded={accountOpen}><span className="avatar small">{initials(session.account.name)}</span><span className="account-name">{session.account.name}<small>{session.account.email}</small></span><ChevronDown size={15}/></button>
-      {accountOpen&&<div className="account-menu">{session.account.role!=='user'&&<button onClick={()=>open('admin')}><Settings size={17}/> Administracija</button>}<button onClick={async()=>{await api('/logout','POST').catch(()=>{});setSession(null);setAccountOpen(false);history.replaceState(null,'','/');setPage(getPage(settings.adminSite));}}><LogOut size={17}/> Odjavi se</button></div>}
+      {accountOpen&&<div className="account-menu">{session.account.auth_kind!=='ednevnik'&&<button onClick={()=>{setAccountOpen(false);setChangePassword(true);}}><KeyRound size={17}/> Promijeni lozinku</button>}{session.account.role!=='user'&&<button onClick={()=>open('admin')}><Settings size={17}/> Administracija</button>}<button onClick={async()=>{await api('/logout','POST').catch(()=>{});setSession(null);setAccountOpen(false);history.replaceState(null,'','/');setPage(getPage(settings.adminSite));}}><LogOut size={17}/> Odjavi se</button></div>}
     </div>
   </header>
+  {changePassword&&<ChangePassword close={()=>setChangePassword(false)} changed={()=>{setChangePassword(false);setLoginNotice('Lozinka je promijenjena. Prijavite se novom lozinkom.');setSession(null);history.replaceState(null,'','/');setPage(getPage(settings.adminSite));}}/>}
   {page==='mail'&&<Mailbox session={session} recipient={recipient} clearRecipient={()=>setRecipient('')}/>}
   {page==='calendar'&&<Calendar boxes={session.boxes}/>}
   {page==='contacts'&&<Contacts compose={address=>{setRecipient(address);open('mail');}}/>}

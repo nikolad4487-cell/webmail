@@ -228,7 +228,7 @@ DEMO_TLS=1 npm test
 npm run build
 ```
 
-Testovi provjeravaju izolaciju škola, pristup referadi, zabranu tuđeg privitka i pošiljatelja, SMTP/IMAP u oba smjera, sadržaj privitka, kvotu, jednu kopiju u Poslano, kalendar, .ics, ograničenje ključa, idempotentnost i odjavu. Provjeravaju i učeničku prijavu preko zaštićene rute, izravnu FormaPoint prijavu s provjerom Auth ID-a, zasebnu prijavu administratora, promjenu izvorne lozinke, reset PIN-a i pristup samo dodijeljenim sandučićima. Lokalni servisi simuliraju produkcijske izvore prijave. GreenMail varijanta provjerava i ispravan odgovor kad poslužitelj ne oglašava IMAP QUOTA.
+Testovi provjeravaju izolaciju škola, pristup referadi, zabranu tuđeg privitka i pošiljatelja, SMTP/IMAP u oba smjera, sadržaj privitka, kvotu, jednu kopiju u Poslano, kalendar, .ics, ograničenje ključa, idempotentnost i odjavu. Provjeravaju i učeničku prijavu preko zaštićene rute, izravnu FormaPoint prijavu s provjerom Auth ID-a, zasebnu prijavu administratora, promjenu izvorne lozinke, reset lozinke i pristup samo dodijeljenim sandučićima. Lokalni servisi simuliraju produkcijske izvore prijave. GreenMail varijanta provjerava i ispravan odgovor kad poslužitelj ne oglašava IMAP QUOTA.
 
 ## Produkcija
 
@@ -339,10 +339,10 @@ te provjerite prijavu na administratorskoj domeni.
 Na `https://webmailhr.com/` jedan obrazac prima korisničko ime ili e-mail adresu. Glavni administrator koristi postojeći lokalni račun na `https://admin.webmailhr.com/`. Postojeći lokalni demo računi s adresama `.test` ostaju dostupni u demo okruženju.
 
 - **e-Dnevnik.** Učenik unosi postojeće korisničko ime ili školsku e-mail adresu i lozinku. Postavite `EDNEVNIK_SUPABASE_PROJECT_ID` na project ref, `EDNEVNIK_SUPABASE_URL` na HTTPS URL Supabase projekta i `EDNEVNIK_USERNAME_LOGIN_URL` na puni HTTPS URL `https://e-ocjene.skolehr.xyz/api/auth/webmail/student`. Serverski `EDNEVNIK_USERNAME_LOGIN_TOKEN` mora imati istu vrijednost kao `WEBMAILHR_STUDENT_LOGIN_TOKEN` u e-Dnevniku. Ako su potrebne dodatne školske domene, navedite ih u `EDNEVNIK_LOGIN_DOMAINS` odvojene zarezom. Prema zadanim postavkama to su `skolehr.xyz` i `eskole.me`. WebmailHR povezuje vraćeni Auth ID i project ref s aktivnim računom s dodijeljenim osobnim sandučićem `@skolehr.xyz`.
-- **FormaPoint.** Postavite `FORMAPOINT_SUPABASE_PROJECT_ID` na zaseban project ref, `FORMAPOINT_SUPABASE_URL` na njegov HTTPS URL i `FORMAPOINT_SUPABASE_AUTH_KEY` na publishable ili anon ključ toga projekta. U administraciji WebmailHR-a za račun vrste FormaPoint unesite stabilni Auth ID i e-mail kako je upisan u FormaPoint Supabase Auth. Korisnik u isti obrazac unosi taj e-mail ili svoju povezanu WebmailHR adresu. WebmailHR pronalazi spremljeni izvorni e-mail, provjerava lozinku na `/auth/v1/token?grant_type=password` i traži isti Auth ID prije izdavanja sesije. Nakon migracije dopunite izvorni e-mail na već povezanim FormaPoint računima. Dodijelite `info@formapoint.online` samo ovlaštenim djelatnicima.
-- **Školski djelatnici.** Koriste punu WebmailHR adresu i osam znamenaka. U administraciji odaberite **Generiraj / resetiraj lozinku**. Lozinka se prikazuje jednom, a reset opoziva postojeće sesije. Postavite serverski `STAFF_PIN_PEPPER` na nasumičnu tajnu od najmanje 32 znaka. Ako je promijenite, izdajte nove lozinke.
+- **FormaPoint.** Postavite `FORMAPOINT_SUPABASE_PROJECT_ID` na zaseban project ref, `FORMAPOINT_SUPABASE_URL` na njegov HTTPS URL i `FORMAPOINT_SUPABASE_AUTH_KEY` na publishable ili anon ključ toga projekta. Novi FormaPoint korisnik može dobiti samostalnu WebmailHR lozinku bez vanjskog Auth ID-a. Za povezani račun u administraciji unesite stabilni Auth ID i e-mail kako je upisan u FormaPoint Supabase Auth. Korisnik u isti obrazac unosi taj e-mail ili svoju povezanu WebmailHR adresu. Dok povezanom računu nije dodijeljena WebmailHR lozinka, WebmailHR pronalazi spremljeni izvorni e-mail, provjerava lozinku na `/auth/v1/token?grant_type=password` i traži isti Auth ID prije izdavanja sesije. Nakon migracije dopunite izvorni e-mail na već povezanim FormaPoint računima. Dodijelite `info@formapoint.online` samo ovlaštenim djelatnicima.
+- **Djelatnici.** Administrator u obrascu korisnika dodjeljuje lozinku za WebmailHR ili klikne **Generiraj lozinku**. Nove lozinke imaju najmanje 12 znakova, a generator izdaje 24 nasumična znaka. Postojeći PIN-ovi ostaju valjani dok ih korisnik ili administrator ne zamijeni. `STAFF_PIN_PEPPER` potreban je samo za te stare PIN-ove; nove lozinke ne ovise o njemu.
 
-U administraciji odaberite vrstu računa prije povezivanja i dodijelite potrebne sandučiće. Aplikacija čuva par referenca projekta + izvorni Auth ID. Izvorni sustavi provjeravaju lozinku pri svakoj novoj prijavi. WebmailHR ne pohranjuje njihove lozinke ni tokene i sam provjerava dodjele za svako otvaranje sandučića ili privitka.
+U administraciji odaberite vrstu računa prije povezivanja i dodijelite potrebne sandučiće. Aplikacija čuva par referenca projekta + izvorni Auth ID. Izvorni sustavi provjeravaju učeničku lozinku i FormaPoint lozinku dok račun nema dodijeljenu WebmailHR lozinku. WebmailHR ne pohranjuje lozinke ni tokene izvornih sustava i sam provjerava dodjele za svako otvaranje sandučića ili privitka.
 
 ### Skupna sinkronizacija i osobni sandučići
 
@@ -381,11 +381,32 @@ Odsutnost korisnika u jednom učitavanju sama ne uklanja postojeći račun,
 članstvo ili poštu. Pri odlasku djelatnika deaktivirajte njegov WebmailHR
 račun prema pravilima ustanove.
 
-Novi djelatnici trebaju WebmailHR PIN. Glavni administrator u **Korisnici**
-može po organizaciji skupno preuzeti do 50 početnih PIN-ova izdanih samo za
-račune bez lozinke. Datoteka ih sadrži u čitljivom obliku. Podijelite ih
-pojedinačno pouzdanim kanalom i uklonite datoteku kad završite. Postojeće
-lozinke ostaju aktivne.
+Administrator u **Korisnici → Početne lozinke** može po organizaciji izdati
+lozinke za do 50 aktivnih djelatnika i FormaPoint korisnika koji nemaju WebmailHR
+lozinku. Datoteka sadrži lozinke u čitljivom obliku; predajte je sigurnim kanalom.
+Postojeće WebmailHR lozinke ne mijenjaju se. Pojedinačni reset dostupnom korisniku
+odmah opoziva sve njegove sesije. Lozinke se u bazi spremaju kao scrypt hash sa soli.
+
+Djelatnik, FormaPoint korisnik i glavni administrator mogu u izborniku računa
+odabrati **Promijeni lozinku**, unijeti trenutnu i dvaput novu lozinku. Nakon
+uspjeha sve sesije su opozvane i korisnik se ponovno prijavljuje. Promjena vrijedi
+samo za WebmailHR, ne mijenja lozinku u izvornom FormaPoint sustavu niti IMAP/SMTP
+pristupne podatke. Za učenike lozinkom i dalje upravlja e-Dnevnik.
+
+Prije objave primijenite migraciju `002-mail-passwords.sql` kroz `npm run migrate`
+ili postojeću Vercel migraciju. Ona označava stare staff PIN hashove i dopušta
+lokalnu lozinku za FormaPoint račune, uz očuvanje izvornih identiteta. Nove lozinke
+ne zapisujte u Git, logove ili audit; audit sadrži samo vrstu radnje i ID korisnika.
+
+Provjera novog toka na praznoj lokalnoj PostgreSQL bazi:
+
+```sh
+TEST_PASSWORD_DATABASE_URL=postgresql://USER:PASSWORD@127.0.0.1:5432/DISPOSABLE_DB npm run test:passwords
+```
+
+Provjere obuhvaćaju dodjelu i generiranje, stari PIN, promjenu vlastite lozinke,
+opoziv sesija, postojeću FormaPoint prijavu, samostalni FormaPoint račun i granice
+ovlasti administratora i korisnika.
 
 ### Dodjela učeničkog sandučića
 

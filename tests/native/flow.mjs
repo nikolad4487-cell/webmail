@@ -33,13 +33,14 @@ before(async()=>{
   await db.query(await readFile(new URL('../../server/schema.sql',import.meta.url),'utf8'));
   const migration=await readFile(new URL('../../migrations/001-native-mail.sql',import.meta.url),'utf8');
   await db.query(migration);await db.query(migration);
+  await db.query(await readFile(new URL('../../migrations/002-mail-passwords.sql',import.meta.url),'utf8'));
   const {hashPassword}=await import('../../server/db.ts');
   const {staffSecret}=await import('../../server/identity.ts');
   const password=await hashPassword(staffSecret('12345678'));
   const org=(await db.query("insert into organizations(name) values('Native pilot') returning id")).rows[0].id;
   await db.query("insert into domains(name,org) values('skolehr.xyz',$1),('formapoint.test',$1)",[org]);
-  const owner=(await db.query("insert into users(org,email,name,password,auth_kind) values($1,'demo@skolehr.xyz','Demo',$2,'staff') returning id",[org,password])).rows[0].id;
-  const other=(await db.query("insert into users(org,email,name,password,auth_kind) values($1,'other@formapoint.test','Other',$2,'staff') returning id",[org,password])).rows[0].id;
+  const owner=(await db.query("insert into users(org,email,name,password,auth_kind,password_scheme) values($1,'demo@skolehr.xyz','Demo',$2,'staff','staff_pin') returning id",[org,password])).rows[0].id;
+  const other=(await db.query("insert into users(org,email,name,password,auth_kind,password_scheme) values($1,'other@formapoint.test','Other',$2,'staff','staff_pin') returning id",[org,password])).rows[0].id;
   box=(await db.query("insert into mailboxes(org,address,label,storage_kind) values($1,'demo@skolehr.xyz','demo@skolehr.xyz','native') returning id",[org])).rows[0].id;
   otherBox=(await db.query("insert into mailboxes(org,address,label) values($1,'other@formapoint.test','Other') returning id",[org])).rows[0].id;
   await db.query('insert into grants(uid,box,can_send) values($1,$2,true),($3,$4,true)',[owner,box,other,otherBox]);

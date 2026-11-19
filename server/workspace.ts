@@ -1,4 +1,5 @@
-import {authKind,externalKind,generatePin,projectIdFor,sourceId,staffSecret} from './identity.js';
+import {generatePassword,newPassword} from './passwords.js';
+import {authKind,projectIdFor,sourceId} from './identity.js';
 import {type Router} from 'express';
 import type {PoolClient} from 'pg';
 import {z} from 'zod';
@@ -139,46 +140,46 @@ export function setupData(api:Router){
     });
     res.json({ok:true});
   });
-  api.post('/admin/users/:id/pin',async(req,res)=>{
-    const a=user(req), uid=id.parse(req.params.id);
-    const pin=await transaction(async c=>{
+  api.post('/admin/passwords/generate',(_req,res)=>res.json({password:generatePassword()}));
+  const resetPassword=async(req:import('express').Request,res:import('express').Response)=>{
+    const a=user(req),uid=id.parse(req.params.id);
+    const input=z.object({password:newPassword.optional()}).strict().parse(req.body??{});
+    const password=input.password??generatePassword();
+    await transaction(async c=>{
       const {rows:[account]}=await c.query('select * from users where id=$1 for update',[uid]);
-      if(!account || (a.role!=='root' && (account.org!==a.org || account.role!=='user'))) return deny();
-      if(account.auth_kind!=='staff') throw new HttpError(409,'Osmeroznamenkasta lozinka dostupna je samo školskim djelatnicima.');
-      let value:string, secret:string;
-      do{
-        value=generatePin();
-        secret=staffSecret(value);
-      }while(account.password && await verifyPassword(secret,account.password));
-      await c.query('update users set password=$2,recovery=null where id=$1',[uid,await hashPassword(secret)]);
+      if(!account || (a.role!=='root' && (account.org!==a.org || account.role!=='user')))return deny();
+      if(!['staff','formapoint'].includes(account.auth_kind))throw new HttpError(409,'Lozinku dodjeljujete djelatnicima i FormaPoint korisnicima.');
+      await c.query("update users set password=$2,password_scheme='scrypt' where id=$1",[uid,await hashPassword(password)]);
       await c.query('delete from sessions where uid=$1',[uid]);
       await c.query('delete from resets where uid=$1',[uid]);
-      await c.query('delete from login_limits where key=$1',[digest('login:'+account.email)]);
-      await c.query('insert into audits(uid,action,target) values($1,$2,$3)',[a.id,'staff.pin.rotate',String(uid)]);
-      return value;
+      for(const address of [account.email,account.source_email].filter(Boolean))await c.query('delete from login_limits where key=$1',[digest('login:'+address)]);
+      await c.query('insert into audits(uid,action,target) values($1,$2,$3)',[a.id,'password.assign',String(uid)]);
     });
-    res.json({pin});
-  });
-  api.post('/admin/staff/initial-pins',async(req,res)=>{
-    const a=user(req);
-    if(a.role!=='root') return deny();
+    res.json({password,pin:password}); // pin is a compatibility alias for older clients.
+  };
+  api.post('/admin/users/:id/password',resetPassword);
+  api.post('/admin/users/:id/pin',resetPassword);
+  const initialPasswords=async(req:import('express').Request,res:import('express').Response)=>{
+    const a=user(req);if(a.role!=='root')return deny();
     const {org}=z.object({org:id.nullable()}).parse(req.body);
-    const generated=await transaction(async client=>{
-      if(!await directoryInstalled(client))throw new HttpError(503,'Skupna dodjela čeka migraciju baze.');
-      const {rows}=await client.query(`select u.id,u.email from users u join directory_mailboxes d on d.uid=u.id
-        join mailboxes m on m.id=d.box where u.auth_kind='staff' and u.active and u.password is null and d.ready and m.active
-        and ($1::int is null or u.org=$1) order by u.id limit 50 for update of u skip locked`,[org]);
+    const generated=await transaction(async c=>{
+      const {rows}=await c.query(`select id,email from users where auth_kind in ('staff','formapoint') and active and password is null
+        and ($1::int is null or org=$1) order by id limit 50 for update skip locked`,[org]);
       const result=[];
       for(const row of rows){
-        const pin=generatePin();
-        await client.query('update users set password=$2 where id=$1',[row.id,await hashPassword(staffSecret(pin))]);
-        result.push({email:row.email,pin});
+        const password=generatePassword();
+        await c.query("update users set password=$2,password_scheme='scrypt' where id=$1",[row.id,await hashPassword(password)]);
+        await c.query('delete from sessions where uid=$1',[row.id]);
+        await c.query('delete from resets where uid=$1',[row.id]);
+        result.push({email:row.email,password,pin:password});
       }
-      if(result.length)await client.query("insert into audits(uid,action,target) values($1,'staff.pin.batch',$2)",[a.id,String(result.length)]);
+      if(result.length)await c.query("insert into audits(uid,action,target) values($1,'password.initial.batch',$2)",[a.id,String(result.length)]);
       return result;
     });
     res.json({generated});
-  });
+  };
+  api.post('/admin/users/initial-passwords',initialPasswords);
+  api.post('/admin/staff/initial-pins',initialPasswords);
   api.get('/admin/:table',async(req,res)=>{
     const a=user(req), name=tableName.parse(req.params.table), t=tables[name];
     res.json((await db.query(`select ${t.columns} from ${name} where ($1::int is null or ${t.scope}=$1) order by 1`,[a.role==='root'?null:a.org])).rows);
@@ -227,23 +228,33 @@ export function setupData(api:Router){
           }
           else if(!current?.password || current.auth_kind!=='local') throw new HttpError(400,'Unesite početnu lozinku.');
           else delete input.password;
+        }else if(kind==='ednevnik'){
+          if(input.password)throw new HttpError(400,'Učenička lozinka mijenja se u e-Dnevniku.');
+          input.password=null;input.password_scheme='scrypt';input.recovery=null;
         }else{
-          if(input.password) throw new HttpError(400,'Lozinka se postavlja prema vrsti prijave.');
-          if(kind==='staff' && current?.auth_kind==='staff') delete input.password;
-          else input.password=null;
+          if(typeof input.password==='string'){
+            input.password=await hashPassword(newPassword.parse(input.password));
+            input.password_scheme='scrypt';
+          }else if(current?.auth_kind===kind){delete input.password;}
+          else{input.password=null;input.password_scheme='scrypt';}
           input.recovery=null;
         }
-        if(externalKind(kind)){
-          input.source_user_id=sourceId.parse(input.source_user_id ?? (current?.auth_kind===kind?current.source_user_id:undefined));
+        if(kind==='local' && typeof input.password==='string')input.password_scheme='scrypt';
+        const sourceUser=input.source_user_id ?? (current?.auth_kind===kind?current.source_user_id:undefined);
+        if(kind==='ednevnik'||(kind==='formapoint'&&sourceUser)){
+          input.source_user_id=sourceId.parse(sourceUser);
           input.source_project=current?.auth_kind===kind && current.source_user_id===input.source_user_id
             ?current.source_project:projectIdFor(kind);
         }else{
-          input.source_user_id=null;
-          input.source_project=null;
+          input.source_user_id=null;input.source_project=null;
         }
-        if(kind==='formapoint'){
+        if(kind==='formapoint'&&input.source_user_id){
           input.source_email=email.parse(input.source_email ?? current?.source_email);
-        }else input.source_email=null;
+        }else{
+          if(kind==='formapoint'&&input.source_email)throw new HttpError(400,'Za povezivanje FormaPoint računa unesite i stabilni ID.');
+          input.source_email=null;
+        }
+        if(kind==='formapoint'&&!input.source_user_id && !input.password && !(current?.auth_kind===kind&&current.password))throw new HttpError(400,'Unesite početnu lozinku za WebmailHR.');
         revoke=!!current&&(current.auth_kind!==kind || current.source_project!==input.source_project ||
           current.source_user_id!==input.source_user_id || current.source_email!==input.source_email || current.email!==input.email ||
           current.role!==input.role || current.active!==input.active || typeof input.password==='string');
@@ -269,6 +280,7 @@ export function setupData(api:Router){
         if(revoke){
           await c.query('delete from sessions where uid=$1',[requested]);
           await c.query('delete from resets where uid=$1',[requested]);
+          if(typeof input.password==='string')for(const address of [input.email,input.source_email].filter(Boolean))await c.query('delete from login_limits where key=$1',[digest('login:'+address)]);
         }
       }else{
         if(name!=='organizations'){cols.push('org');vals.push(org);}

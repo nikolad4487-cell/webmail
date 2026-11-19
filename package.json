@@ -17,7 +17,8 @@
     "test:native": "node --import tsx --test tests/native/*.mjs",
     "native:pilot": "tsx scripts/native-pilot.ts",
     "inbound:probe": "tsx scripts/inbound-probe.ts",
-    "test:migration": "node --import tsx --test tests/migration/*.mjs"
+    "test:migration": "node --import tsx --test tests/migration/*.mjs",
+    "test:passwords": "node --import tsx --test tests/passwords/*.mjs"
   },
   "repository": {
     "type": "git",

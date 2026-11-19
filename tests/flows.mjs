@@ -222,7 +222,7 @@ test('Odvojeni projekti, isti korisnički identifikator i provjera nove izvorne 
   }
 });
 
-test('Osmeroznamenkasta lozinka djelatnika, ograničenje pokušaja i opoziv sesije',async()=>{
+test('Generirana lozinka djelatnika, ograničenje pokušaja i opoziv sesije',async()=>{
   const {cookie:admin}=await login('lena@formapoint.test');
   const {body:orgs}=await request('/admin/organizations',{cookie:admin});
   const org=orgs.find(x=>x.name==='ŠkoleHR').id, email='nastavnik-'+run+'@skolehr.test';
@@ -233,7 +233,7 @@ test('Osmeroznamenkasta lozinka djelatnika, ograničenje pokušaja i opoziv sesi
   await request('/admin/access/'+referada.id,{cookie:admin,method:'PUT',body:{kind:'grant',uid:staff.id,remove:false,can_send:false,can_calendar:false}});
   const pinUrl='/admin/users/'+staff.id+'/pin';
   const {body:first}=await request(pinUrl,{cookie:admin,method:'POST'});
-  assert.match(first.pin,/^[0-9]{8}$/);
+  assert.match(first.pin,/^[A-Za-z0-9_-]{24}$/);
   const staffLogin=(password,status=200)=>request('/login',{body:{identifier:email,password},status});
   const {cookie}=await staffLogin(first.pin);
   await request('/login',{body:{identifier:'lena@formapoint.test',password:'Webmail-Test-2026'},status:401});
@@ -245,7 +245,7 @@ test('Osmeroznamenkasta lozinka djelatnika, ograničenje pokušaja i opoziv sesi
   for(let i=0;i<6;i++)await staffLogin('1234567',401);
   await staffLogin(first.pin,429);
   const {body:second}=await request(pinUrl,{cookie:admin,method:'POST'});
-  assert.match(second.pin,/^[0-9]{8}$/);
+  assert.match(second.pin,/^[A-Za-z0-9_-]{24}$/);
   assert.notEqual(second.pin,first.pin);
   await request('/me',{cookie,status:401});
   await staffLogin(first.pin,401);
