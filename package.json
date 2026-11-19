@@ -7,7 +7,7 @@
     "test": "node --test tests/*.mjs",
     "dev": "tsx server/index.ts",
     "start": "NODE_ENV=production tsx server/index.ts",
-    "build": "tsc --noEmit && vite build",
+    "build": "tsc --noEmit && vite build && tsc -p tsconfig.server.json",
     "migrate": "tsx scripts/database.ts",
     "seed": "tsx scripts/demo.ts",
     "bootstrap": "tsx scripts/bootstrap.ts",

@@ -3,7 +3,7 @@ import {isNative,changeNative,MAX_NATIVE_BYTES} from './native-mail.js';
 import {invalidLogin,staffSecret,verifyFormaPoint,verifyStudent} from './identity.js';
 import express, {type Request,type Response} from 'express';
 import {z, ZodError} from 'zod';
-import {checkLoginDatabase,db,digest,hashPassword,loginDatabaseIssue,token,transaction,verifyPassword,type LoginDatabaseIssue} from './db.js';
+import {checkLoginDatabase,databaseUrl,db,digest,hashPassword,loginDatabaseIssue,token,transaction,verifyPassword,type LoginDatabaseIssue} from './db.js';
 import {addressing,append,archiveDraft,demo,folder,HttpError,imap,listing,message,mime,quotaFor,smtp,type Outgoing} from './mail.js';
 import {email,id,user,deny} from './http.js';
 import {setupData} from './workspace.js';
@@ -69,7 +69,7 @@ class DatabaseUnavailable extends HttpError {
   }
 }
 api.use((_req,_res,next)=>{
-  if(!process.env.DATABASE_URL?.trim()) throw new DatabaseUnavailable('DB_CONFIG');
+  if(!databaseUrl?.trim()) throw new DatabaseUnavailable('DB_CONFIG');
   next();
 });
 api.get('/health',async (_req,res)=>{

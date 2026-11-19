@@ -1,0 +1,312 @@
+// use prisma-8
+// Contract inferred from the live database schema. Edit as needed, then run `prisma contract emit`.
+
+model Organizations {
+  id        Int         @id(map: "organizations_pkey") @default(autoincrement())
+  name      String      @unique(map: "organizations_name_key")
+  domains   Domains[]
+  mailboxes Mailboxes[]
+  schools   Schools[]
+  senders   Senders[]
+  users     Users[]
+
+  @@map("organizations")
+}
+
+model Mailboxes {
+  id                 Int                  @id(map: "mailboxes_pkey") @default(autoincrement())
+  org                Int
+  address            String               @unique(map: "mailboxes_address_key")
+  label              String
+  shared             Boolean              @default(false)
+  active             Boolean              @default(true)
+  targetQuotaGb      Int                  @default(15) @map("target_quota_gb")
+  storageKind        String               @default("imap") @map("storage_kind")
+  aliases            Aliases[]  events             Events[]
+  grants             Grants[]
+  nativeMessages     NativeMessages[]
+  nativeSendAttempts NativeSendAttempts[]
+  organizations      Organizations        @relation(fields: [org], references: [id], map: "mailboxes_org_fkey", index: "mailboxes_org_id_key")
+
+  @@unique([org, id], map: "mailboxes_org_id_key")
+  @@check(expression: sql`(address = lower(address))`, map: "mailboxes_address_check")
+  @@check(expression: sql`(storage_kind = ANY (ARRAY['imap'::text, 'native'::text]))`, map: "mailboxes_storage_kind_check")
+  @@check(expression: sql`(target_quota_gb > 0)`, map: "mailboxes_target_quota_gb_check")
+  @@map("mailboxes")
+}
+
+model Aliases {
+  address   String    @id(map: "aliases_pkey")
+  box       Int
+  sendAs    Boolean   @default(false) @map("send_as")
+  mailboxes Mailboxes @relation(fields: [box], references: [id], onDelete: Cascade, map: "aliases_box_fkey", index: false)
+
+  @@check(expression: sql`(address = lower(address))`, map: "aliases_address_check")
+  @@map("aliases")
+}
+
+model Schools {
+  id                         Int                          @id(map: "schools_pkey") @default(autoincrement())
+  org                        Int
+  name                       String
+  directorySchoolMemberships DirectorySchoolMemberships[]
+  directorySchools           DirectorySchools?
+  users                      Users[]
+  organizations              Organizations                @relation(fields: [org], references: [id], map: "schools_org_fkey", index: "schools_org_id_key")
+
+  @@unique([org, id], map: "schools_org_id_key")
+  @@unique([org, name], map: "schools_org_name_key")
+  @@map("schools")
+}
+
+model Users {
+  id                  Int                  @id(map: "users_pkey") @default(autoincrement())
+  org                 Int
+  school              Int?
+  email               String               @unique(map: "users_email_key")
+  name                String
+  password            String?
+  recovery            String?
+  role                String               @default("user")
+  active              Boolean              @default(true)
+  authKind            String               @default("local") @map("auth_kind")
+  sourceProject       String?              @map("source_project")
+  sourceUserId        String?              @map("source_user_id")
+  sourceEmail         String?              @map("source_email")
+  audits              Audits[]
+  contacts            Contacts[]
+  directoryIdentities DirectoryIdentities?
+  events              Events[]
+  grants              Grants[]
+  resets              Resets[]
+  sessions            Sessions[]
+  organizations       Organizations        @relation(fields: [org], references: [id], map: "users_org_fkey", index: false)
+  schools             Schools?             @relation(fields: [org, school], references: [org, id], map: "users_org_school_fkey", index: false)
+
+  @@index([sourceEmail], map: "users_source_email", where: sql`(source_email IS NOT NULL)`, unique: true)
+  @@index([sourceProject, sourceUserId], map: "users_source_identity", unique: true)
+  @@check(expression: sql`(((auth_kind = ANY (ARRAY['local'::text, 'staff'::text])) AND (source_project IS NULL) AND (source_user_id IS NULL)) OR ((auth_kind = ANY (ARRAY['ednevnik'::text, 'formapoint'::text])) AND (source_project IS NOT NULL) AND (source_user_id IS NOT NULL) AND (password IS NULL)))`, map: "users_auth_identity")
+  @@check(expression: sql`(auth_kind = ANY (ARRAY['local'::text, 'staff'::text, 'ednevnik'::text, 'formapoint'::text]))`, map: "users_auth_kind_check")
+  @@check(expression: sql`((source_email IS NULL) OR ((auth_kind = 'formapoint'::text) AND (source_email = lower(source_email))))`, map: "users_check")
+  @@check(expression: sql`(email = lower(email))`, map: "users_email_check")
+  @@check(expression: sql`(role = ANY (ARRAY['root'::text, 'admin'::text, 'user'::text]))`, map: "users_role_check")
+  @@map("users")
+}
+
+model Audits {
+  id     Int                    @id(map: "audits_pkey") @default(autoincrement())
+  uid    Int?
+  action String
+  target String
+  at     DateTime(precision: 6) @default(now())
+  users  Users?                 @relation(fields: [uid], references: [id], map: "audits_uid_fkey", index: false)
+
+  @@map("audits")
+}
+
+model Contacts {
+  id    Int    @id(map: "contacts_pkey") @default(autoincrement())
+  uid   Int
+  name  String
+  email String
+  users Users  @relation(fields: [uid], references: [id], onDelete: Cascade, map: "contacts_uid_fkey", index: "contacts_uid_email_key")
+
+  @@unique([uid, email], map: "contacts_uid_email_key")
+  @@map("contacts")
+}
+
+model Senders {
+  id            Int             @id(map: "senders_pkey") @default(autoincrement())
+  org           Int
+  address       String          @unique(map: "senders_address_key")
+  replyTo       String          @map("reply_to")
+  kind          String
+  active        Boolean         @default(true)
+  deliveries    Deliveries[]
+  subscriptions Subscriptions[]
+  organizations Organizations   @relation(fields: [org], references: [id], map: "senders_org_fkey", index: false)
+
+  @@check(expression: sql`(kind = ANY (ARRAY['order'::text, 'promotion'::text]))`, map: "senders_kind_check")
+  @@map("senders")
+}
+
+model Deliveries {
+  id         Int                    @id(map: "deliveries_pkey") @default(autoincrement())
+  sender     Int
+  externalId String                 @map("external_id")
+  recipient  String
+  list       String                 @default("")
+  status     String
+  at         DateTime(precision: 6) @default(now())
+  senders    Senders                @relation(fields: [sender], references: [id], map: "deliveries_sender_fkey", index: "deliveries_sender_external_id_recipient_list_key")
+
+  @@unique([sender, externalId, recipient, list], map: "deliveries_sender_external_id_recipient_list_key")
+  @@index([sender, externalId], map: "deliveries_order_event", where: sql`(list = ''::text)`, unique: true)
+  @@check(expression: sql`(status = ANY (ARRAY['pending'::text, 'submitted'::text, 'failed'::text, 'delivered'::text, 'unknown'::text]))`, map: "deliveries_status_check")
+  @@map("deliveries")
+}
+
+model DirectoryIdentities {
+  project                    String
+  subject                    String
+  uid                        Int                          @unique(map: "directory_identities_uid_key")
+  directorySchoolMemberships DirectorySchoolMemberships[]
+  users                      Users                        @relation(fields: [uid], references: [id], onDelete: Cascade, map: "directory_identities_uid_fkey")
+
+  @@id([project, subject], map: "directory_identities_pkey")
+  @@map("directory_identities")
+}
+
+model DirectorySchoolMemberships {
+  uid                 Int
+  school              Int
+  schools             Schools             @relation(fields: [school], references: [id], onDelete: Cascade, map: "directory_school_memberships_school_fkey", index: false)
+  directoryIdentities DirectoryIdentities @relation(fields: [uid], references: [uid], onDelete: Cascade, map: "directory_school_memberships_uid_fkey", index: "directory_school_memberships_pkey")
+
+  @@id([uid, school], map: "directory_school_memberships_pkey")
+  @@map("directory_school_memberships")
+}
+
+model DirectorySchools {
+  project String
+  subject String
+  school  Int     @unique(map: "directory_schools_school_key")
+  schools Schools @relation(fields: [school], references: [id], onDelete: Cascade, map: "directory_schools_school_fkey")
+
+  @@id([project, subject], map: "directory_schools_pkey")
+  @@map("directory_schools")
+}
+
+model Domains {
+  name          String        @id(map: "domains_pkey")
+  org           Int
+  inbound       Boolean       @default(true)
+  outbound      Boolean       @default(true)
+  organizations Organizations @relation(fields: [org], references: [id], map: "domains_org_fkey", index: "domains_org_name_key")
+
+  @@unique([org, name], map: "domains_org_name_key")
+  @@check(expression: sql`(name = lower(name))`, map: "domains_name_check")
+  @@map("domains")
+}
+
+model Events {
+  id        Int                    @id(map: "events_pkey") @default(autoincrement())
+  uid       Int
+  box       Int?
+  title     String
+  starts    DateTime(precision: 6)
+  ends      DateTime(precision: 6)
+  attendees String?[]              @default([])
+  mailboxes Mailboxes?             @relation(fields: [box], references: [id], map: "events_box_fkey", index: false)
+  users     Users                  @relation(fields: [uid], references: [id], map: "events_uid_fkey", index: false)
+
+  @@check(expression: sql`(ends > starts)`, map: "events_check")
+  @@map("events")
+}
+
+model Grants {
+  uid         Int
+  box         Int
+  canSend     Boolean   @default(false) @map("can_send")
+  canCalendar Boolean   @default(false) @map("can_calendar")
+  mailboxes   Mailboxes @relation(fields: [box], references: [id], onDelete: Cascade, map: "grants_box_fkey", index: false)
+  users       Users     @relation(fields: [uid], references: [id], onDelete: Cascade, map: "grants_uid_fkey", index: "grants_pkey")
+
+  @@id([uid, box], map: "grants_pkey")
+  @@map("grants")
+}
+
+model LoginLimits {
+  key     String                 @id(map: "login_limits_pkey")
+  count   Int
+  expires DateTime(precision: 6)
+
+  @@map("login_limits")
+}
+
+model NativeMessages {
+  id                Int                    @id(map: "native_messages_pkey") @default(autoincrement())
+  box               Int
+  path              String
+  deliveryHash      String?                @map("delivery_hash")
+  envelopeFrom      String?                @map("envelope_from")
+  raw               Bytes
+  subject           String
+  senderName        String?                @map("sender_name")
+  senderAddress     String?                @map("sender_address")
+  textBody          String                 @map("text_body")
+  messageId         String?                @map("message_id")
+  inReplyTo         String?                @map("in_reply_to")
+  sentAt            DateTime(precision: 6) @map("sent_at")
+  seen              Boolean                @default(false)
+  starred           Boolean                @default(false)
+  bytes             Int
+  receivedAt        DateTime(precision: 6) @default(now()) @map("received_at")
+  nativeAttachments NativeAttachments[]
+  mailboxes         Mailboxes              @relation(fields: [box], references: [id], onDelete: Cascade, map: "native_messages_box_fkey", index: "native_messages_box_delivery_hash_key")
+
+  @@unique([box, deliveryHash], map: "native_messages_box_delivery_hash_key")
+  @@index([box, path, sentAt, id], map: "native_messages_folder")
+  @@check(expression: sql`(bytes > 0)`, map: "native_messages_bytes_check")
+  @@check(expression: sql`(path = ANY (ARRAY['INBOX'::text, 'Sent'::text, 'Drafts'::text, 'Junk'::text, 'Trash'::text]))`, map: "native_messages_path_check")
+  @@rls
+  @@map("native_messages")
+}
+
+model NativeAttachments {
+  message        Int
+  ordinal        Int
+  filename       String
+  contentType    String         @map("content_type")
+  content        Bytes
+  nativeMessages NativeMessages @relation(fields: [message], references: [id], onDelete: Cascade, map: "native_attachments_message_fkey", index: "native_attachments_pkey")
+
+  @@id([message, ordinal], map: "native_attachments_pkey")
+  @@check(expression: sql`(ordinal >= 0)`, map: "native_attachments_ordinal_check")
+  @@rls
+  @@map("native_attachments")
+}
+
+model NativeSendAttempts {
+  id         Int                    @id(map: "native_send_attempts_pkey") @default(autoincrement())
+  box        Int
+  recipients Int
+  at         DateTime(precision: 6) @default(now())
+  status     String                 @default("unknown")
+  mailboxes  Mailboxes              @relation(fields: [box], references: [id], onDelete: Cascade, map: "native_send_attempts_box_fkey", index: false)
+
+  @@index([at], map: "native_send_attempts_at")
+  @@check(expression: sql`(recipients > 0)`, map: "native_send_attempts_recipients_check")
+  @@check(expression: sql`(status = ANY (ARRAY['unknown'::text, 'submitted'::text, 'sandbox'::text]))`, map: "native_send_attempts_status_check")
+  @@rls
+  @@map("native_send_attempts")
+}
+
+model Resets {
+  token   String                 @id(map: "resets_pkey")
+  uid     Int
+  expires DateTime(precision: 6)
+  users   Users                  @relation(fields: [uid], references: [id], onDelete: Cascade, map: "resets_uid_fkey", index: false)
+
+  @@map("resets")
+}
+
+model Sessions {
+  token   String                 @id(map: "sessions_pkey")
+  uid     Int
+  expires DateTime(precision: 6)
+  users   Users                  @relation(fields: [uid], references: [id], onDelete: Cascade, map: "sessions_uid_fkey", index: false)
+
+  @@map("sessions")
+}
+
+model Subscriptions {
+  sender    Int
+  list      String
+  recipient String
+  allowed   Boolean
+  senders   Senders @relation(fields: [sender], references: [id], map: "subscriptions_sender_fkey", index: "subscriptions_pkey")
+
+  @@id([sender, list, recipient], map: "subscriptions_pkey")
+  @@map("subscriptions")
+}

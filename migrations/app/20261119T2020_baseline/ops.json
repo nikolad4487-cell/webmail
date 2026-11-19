@@ -1,0 +1,3326 @@
+[
+  {
+    "id": "schema.public",
+    "label": "Create schema \"public\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres"
+    },
+    "precheck": [],
+    "execute": [
+      {
+        "description": "Create schema \"public\"",
+        "sql": "CREATE SCHEMA IF NOT EXISTS \"public\"",
+        "params": []
+      }
+    ],
+    "postcheck": []
+  },
+  {
+    "id": "table.aliases",
+    "label": "Create table \"aliases\"",
+    "summary": "Creates table \"aliases\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "table",
+        "name": "aliases"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure table \"aliases\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"aliases\""
+        ],
+        "expectation": {
+          "expects": "absent",
+          "object": "table \"aliases\""
+        }
+      }
+    ],
+    "execute": [
+      {
+        "description": "create table \"aliases\"",
+        "sql": "CREATE TABLE \"public\".\"aliases\" (\n  \"address\" text NOT NULL,\n  \"box\" int4 NOT NULL,\n  \"send_as\" bool DEFAULT false NOT NULL,\n  CONSTRAINT \"aliases_pkey\" PRIMARY KEY (\"address\"),\n  CONSTRAINT \"aliases_address_check\" CHECK ((address = lower(address)))\n)",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify table \"aliases\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_class\" AS \"c\" WHERE (\"c\".\"oid\" = to_regclass($1) AND (\"c\".\"relkind\" = $2 OR \"c\".\"relkind\" = $3))) AS \"result\"",
+        "params": [
+          "\"public\".\"aliases\"",
+          "r",
+          "p"
+        ],
+        "expectation": {
+          "expects": "present",
+          "object": "table \"aliases\""
+        }
+      }
+    ]
+  },
+  {
+    "id": "table.audits",
+    "label": "Create table \"audits\"",
+    "summary": "Creates table \"audits\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "table",
+        "name": "audits"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure table \"audits\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"audits\""
+        ],
+        "expectation": {
+          "expects": "absent",
+          "object": "table \"audits\""
+        }
+      }
+    ],
+    "execute": [
+      {
+        "description": "create table \"audits\"",
+        "sql": "CREATE TABLE \"public\".\"audits\" (\n  \"action\" text NOT NULL,\n  \"at\" timestamptz(6) DEFAULT (now()) NOT NULL,\n  \"id\" SERIAL NOT NULL,\n  \"target\" text NOT NULL,\n  \"uid\" int4,\n  CONSTRAINT \"audits_pkey\" PRIMARY KEY (\"id\")\n)",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify table \"audits\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_class\" AS \"c\" WHERE (\"c\".\"oid\" = to_regclass($1) AND (\"c\".\"relkind\" = $2 OR \"c\".\"relkind\" = $3))) AS \"result\"",
+        "params": [
+          "\"public\".\"audits\"",
+          "r",
+          "p"
+        ],
+        "expectation": {
+          "expects": "present",
+          "object": "table \"audits\""
+        }
+      }
+    ]
+  },
+  {
+    "id": "table.contacts",
+    "label": "Create table \"contacts\"",
+    "summary": "Creates table \"contacts\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "table",
+        "name": "contacts"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure table \"contacts\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"contacts\""
+        ],
+        "expectation": {
+          "expects": "absent",
+          "object": "table \"contacts\""
+        }
+      }
+    ],
+    "execute": [
+      {
+        "description": "create table \"contacts\"",
+        "sql": "CREATE TABLE \"public\".\"contacts\" (\n  \"email\" text NOT NULL,\n  \"id\" SERIAL NOT NULL,\n  \"name\" text NOT NULL,\n  \"uid\" int4 NOT NULL,\n  CONSTRAINT \"contacts_pkey\" PRIMARY KEY (\"id\")\n)",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify table \"contacts\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_class\" AS \"c\" WHERE (\"c\".\"oid\" = to_regclass($1) AND (\"c\".\"relkind\" = $2 OR \"c\".\"relkind\" = $3))) AS \"result\"",
+        "params": [
+          "\"public\".\"contacts\"",
+          "r",
+          "p"
+        ],
+        "expectation": {
+          "expects": "present",
+          "object": "table \"contacts\""
+        }
+      }
+    ]
+  },
+  {
+    "id": "table.deliveries",
+    "label": "Create table \"deliveries\"",
+    "summary": "Creates table \"deliveries\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "table",
+        "name": "deliveries"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure table \"deliveries\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"deliveries\""
+        ],
+        "expectation": {
+          "expects": "absent",
+          "object": "table \"deliveries\""
+        }
+      }
+    ],
+    "execute": [
+      {
+        "description": "create table \"deliveries\"",
+        "sql": "CREATE TABLE \"public\".\"deliveries\" (\n  \"at\" timestamptz(6) DEFAULT (now()) NOT NULL,\n  \"external_id\" text NOT NULL,\n  \"id\" SERIAL NOT NULL,\n  \"list\" text DEFAULT '' NOT NULL,\n  \"recipient\" text NOT NULL,\n  \"sender\" int4 NOT NULL,\n  \"status\" text NOT NULL,\n  CONSTRAINT \"deliveries_pkey\" PRIMARY KEY (\"id\"),\n  CONSTRAINT \"deliveries_status_check\" CHECK ((status = ANY (ARRAY['pending'::text, 'submitted'::text, 'failed'::text, 'delivered'::text, 'unknown'::text])))\n)",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify table \"deliveries\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_class\" AS \"c\" WHERE (\"c\".\"oid\" = to_regclass($1) AND (\"c\".\"relkind\" = $2 OR \"c\".\"relkind\" = $3))) AS \"result\"",
+        "params": [
+          "\"public\".\"deliveries\"",
+          "r",
+          "p"
+        ],
+        "expectation": {
+          "expects": "present",
+          "object": "table \"deliveries\""
+        }
+      }
+    ]
+  },
+  {
+    "id": "table.directory_identities",
+    "label": "Create table \"directory_identities\"",
+    "summary": "Creates table \"directory_identities\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "table",
+        "name": "directory_identities"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure table \"directory_identities\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"directory_identities\""
+        ],
+        "expectation": {
+          "expects": "absent",
+          "object": "table \"directory_identities\""
+        }
+      }
+    ],
+    "execute": [
+      {
+        "description": "create table \"directory_identities\"",
+        "sql": "CREATE TABLE \"public\".\"directory_identities\" (\n  \"project\" text NOT NULL,\n  \"subject\" text NOT NULL,\n  \"uid\" int4 NOT NULL,\n  CONSTRAINT \"directory_identities_pkey\" PRIMARY KEY (\"project\", \"subject\")\n)",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify table \"directory_identities\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_class\" AS \"c\" WHERE (\"c\".\"oid\" = to_regclass($1) AND (\"c\".\"relkind\" = $2 OR \"c\".\"relkind\" = $3))) AS \"result\"",
+        "params": [
+          "\"public\".\"directory_identities\"",
+          "r",
+          "p"
+        ],
+        "expectation": {
+          "expects": "present",
+          "object": "table \"directory_identities\""
+        }
+      }
+    ]
+  },
+  {
+    "id": "table.directory_school_memberships",
+    "label": "Create table \"directory_school_memberships\"",
+    "summary": "Creates table \"directory_school_memberships\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "table",
+        "name": "directory_school_memberships"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure table \"directory_school_memberships\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"directory_school_memberships\""
+        ],
+        "expectation": {
+          "expects": "absent",
+          "object": "table \"directory_school_memberships\""
+        }
+      }
+    ],
+    "execute": [
+      {
+        "description": "create table \"directory_school_memberships\"",
+        "sql": "CREATE TABLE \"public\".\"directory_school_memberships\" (\n  \"school\" int4 NOT NULL,\n  \"uid\" int4 NOT NULL,\n  CONSTRAINT \"directory_school_memberships_pkey\" PRIMARY KEY (\"uid\", \"school\")\n)",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify table \"directory_school_memberships\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_class\" AS \"c\" WHERE (\"c\".\"oid\" = to_regclass($1) AND (\"c\".\"relkind\" = $2 OR \"c\".\"relkind\" = $3))) AS \"result\"",
+        "params": [
+          "\"public\".\"directory_school_memberships\"",
+          "r",
+          "p"
+        ],
+        "expectation": {
+          "expects": "present",
+          "object": "table \"directory_school_memberships\""
+        }
+      }
+    ]
+  },
+  {
+    "id": "table.directory_schools",
+    "label": "Create table \"directory_schools\"",
+    "summary": "Creates table \"directory_schools\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "table",
+        "name": "directory_schools"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure table \"directory_schools\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"directory_schools\""
+        ],
+        "expectation": {
+          "expects": "absent",
+          "object": "table \"directory_schools\""
+        }
+      }
+    ],
+    "execute": [
+      {
+        "description": "create table \"directory_schools\"",
+        "sql": "CREATE TABLE \"public\".\"directory_schools\" (\n  \"project\" text NOT NULL,\n  \"school\" int4 NOT NULL,\n  \"subject\" text NOT NULL,\n  CONSTRAINT \"directory_schools_pkey\" PRIMARY KEY (\"project\", \"subject\")\n)",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify table \"directory_schools\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_class\" AS \"c\" WHERE (\"c\".\"oid\" = to_regclass($1) AND (\"c\".\"relkind\" = $2 OR \"c\".\"relkind\" = $3))) AS \"result\"",
+        "params": [
+          "\"public\".\"directory_schools\"",
+          "r",
+          "p"
+        ],
+        "expectation": {
+          "expects": "present",
+          "object": "table \"directory_schools\""
+        }
+      }
+    ]
+  },
+  {
+    "id": "table.domains",
+    "label": "Create table \"domains\"",
+    "summary": "Creates table \"domains\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "table",
+        "name": "domains"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure table \"domains\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"domains\""
+        ],
+        "expectation": {
+          "expects": "absent",
+          "object": "table \"domains\""
+        }
+      }
+    ],
+    "execute": [
+      {
+        "description": "create table \"domains\"",
+        "sql": "CREATE TABLE \"public\".\"domains\" (\n  \"inbound\" bool DEFAULT true NOT NULL,\n  \"name\" text NOT NULL,\n  \"org\" int4 NOT NULL,\n  \"outbound\" bool DEFAULT true NOT NULL,\n  CONSTRAINT \"domains_pkey\" PRIMARY KEY (\"name\"),\n  CONSTRAINT \"domains_name_check\" CHECK ((name = lower(name)))\n)",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify table \"domains\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_class\" AS \"c\" WHERE (\"c\".\"oid\" = to_regclass($1) AND (\"c\".\"relkind\" = $2 OR \"c\".\"relkind\" = $3))) AS \"result\"",
+        "params": [
+          "\"public\".\"domains\"",
+          "r",
+          "p"
+        ],
+        "expectation": {
+          "expects": "present",
+          "object": "table \"domains\""
+        }
+      }
+    ]
+  },
+  {
+    "id": "table.events",
+    "label": "Create table \"events\"",
+    "summary": "Creates table \"events\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "table",
+        "name": "events"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure table \"events\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"events\""
+        ],
+        "expectation": {
+          "expects": "absent",
+          "object": "table \"events\""
+        }
+      }
+    ],
+    "execute": [
+      {
+        "description": "create table \"events\"",
+        "sql": "CREATE TABLE \"public\".\"events\" (\n  \"attendees\" text[] DEFAULT '{}' NOT NULL,\n  \"box\" int4,\n  \"ends\" timestamptz(6) NOT NULL,\n  \"id\" SERIAL NOT NULL,\n  \"starts\" timestamptz(6) NOT NULL,\n  \"title\" text NOT NULL,\n  \"uid\" int4 NOT NULL,\n  CONSTRAINT \"events_pkey\" PRIMARY KEY (\"id\"),\n  CONSTRAINT \"events_check\" CHECK ((ends > starts))\n)",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify table \"events\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_class\" AS \"c\" WHERE (\"c\".\"oid\" = to_regclass($1) AND (\"c\".\"relkind\" = $2 OR \"c\".\"relkind\" = $3))) AS \"result\"",
+        "params": [
+          "\"public\".\"events\"",
+          "r",
+          "p"
+        ],
+        "expectation": {
+          "expects": "present",
+          "object": "table \"events\""
+        }
+      }
+    ]
+  },
+  {
+    "id": "table.grants",
+    "label": "Create table \"grants\"",
+    "summary": "Creates table \"grants\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "table",
+        "name": "grants"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure table \"grants\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"grants\""
+        ],
+        "expectation": {
+          "expects": "absent",
+          "object": "table \"grants\""
+        }
+      }
+    ],
+    "execute": [
+      {
+        "description": "create table \"grants\"",
+        "sql": "CREATE TABLE \"public\".\"grants\" (\n  \"box\" int4 NOT NULL,\n  \"can_calendar\" bool DEFAULT false NOT NULL,\n  \"can_send\" bool DEFAULT false NOT NULL,\n  \"uid\" int4 NOT NULL,\n  CONSTRAINT \"grants_pkey\" PRIMARY KEY (\"uid\", \"box\")\n)",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify table \"grants\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_class\" AS \"c\" WHERE (\"c\".\"oid\" = to_regclass($1) AND (\"c\".\"relkind\" = $2 OR \"c\".\"relkind\" = $3))) AS \"result\"",
+        "params": [
+          "\"public\".\"grants\"",
+          "r",
+          "p"
+        ],
+        "expectation": {
+          "expects": "present",
+          "object": "table \"grants\""
+        }
+      }
+    ]
+  },
+  {
+    "id": "table.login_limits",
+    "label": "Create table \"login_limits\"",
+    "summary": "Creates table \"login_limits\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "table",
+        "name": "login_limits"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure table \"login_limits\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"login_limits\""
+        ],
+        "expectation": {
+          "expects": "absent",
+          "object": "table \"login_limits\""
+        }
+      }
+    ],
+    "execute": [
+      {
+        "description": "create table \"login_limits\"",
+        "sql": "CREATE TABLE \"public\".\"login_limits\" (\n  \"count\" int4 NOT NULL,\n  \"expires\" timestamptz(6) NOT NULL,\n  \"key\" text NOT NULL,\n  CONSTRAINT \"login_limits_pkey\" PRIMARY KEY (\"key\")\n)",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify table \"login_limits\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_class\" AS \"c\" WHERE (\"c\".\"oid\" = to_regclass($1) AND (\"c\".\"relkind\" = $2 OR \"c\".\"relkind\" = $3))) AS \"result\"",
+        "params": [
+          "\"public\".\"login_limits\"",
+          "r",
+          "p"
+        ],
+        "expectation": {
+          "expects": "present",
+          "object": "table \"login_limits\""
+        }
+      }
+    ]
+  },
+  {
+    "id": "table.mailboxes",
+    "label": "Create table \"mailboxes\"",
+    "summary": "Creates table \"mailboxes\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "table",
+        "name": "mailboxes"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure table \"mailboxes\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"mailboxes\""
+        ],
+        "expectation": {
+          "expects": "absent",
+          "object": "table \"mailboxes\""
+        }
+      }
+    ],
+    "execute": [
+      {
+        "description": "create table \"mailboxes\"",
+        "sql": "CREATE TABLE \"public\".\"mailboxes\" (\n  \"active\" bool DEFAULT true NOT NULL,\n  \"address\" text NOT NULL,\n  \"id\" SERIAL NOT NULL,\n  \"label\" text NOT NULL,\n  \"org\" int4 NOT NULL,\n  \"shared\" bool DEFAULT false NOT NULL,\n  \"storage_kind\" text DEFAULT 'imap' NOT NULL,\n  \"target_quota_gb\" int4 DEFAULT 15 NOT NULL,\n  CONSTRAINT \"mailboxes_pkey\" PRIMARY KEY (\"id\"),\n  CONSTRAINT \"mailboxes_address_check\" CHECK ((address = lower(address))),\n  CONSTRAINT \"mailboxes_storage_kind_check\" CHECK ((storage_kind = ANY (ARRAY['imap'::text, 'native'::text]))),\n  CONSTRAINT \"mailboxes_target_quota_gb_check\" CHECK ((target_quota_gb > 0))\n)",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify table \"mailboxes\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_class\" AS \"c\" WHERE (\"c\".\"oid\" = to_regclass($1) AND (\"c\".\"relkind\" = $2 OR \"c\".\"relkind\" = $3))) AS \"result\"",
+        "params": [
+          "\"public\".\"mailboxes\"",
+          "r",
+          "p"
+        ],
+        "expectation": {
+          "expects": "present",
+          "object": "table \"mailboxes\""
+        }
+      }
+    ]
+  },
+  {
+    "id": "table.native_attachments",
+    "label": "Create table \"native_attachments\"",
+    "summary": "Creates table \"native_attachments\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "table",
+        "name": "native_attachments"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure table \"native_attachments\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"native_attachments\""
+        ],
+        "expectation": {
+          "expects": "absent",
+          "object": "table \"native_attachments\""
+        }
+      }
+    ],
+    "execute": [
+      {
+        "description": "create table \"native_attachments\"",
+        "sql": "CREATE TABLE \"public\".\"native_attachments\" (\n  \"content\" bytea NOT NULL,\n  \"content_type\" text NOT NULL,\n  \"filename\" text NOT NULL,\n  \"message\" int4 NOT NULL,\n  \"ordinal\" int4 NOT NULL,\n  CONSTRAINT \"native_attachments_pkey\" PRIMARY KEY (\"message\", \"ordinal\"),\n  CONSTRAINT \"native_attachments_ordinal_check\" CHECK ((ordinal >= 0))\n)",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify table \"native_attachments\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_class\" AS \"c\" WHERE (\"c\".\"oid\" = to_regclass($1) AND (\"c\".\"relkind\" = $2 OR \"c\".\"relkind\" = $3))) AS \"result\"",
+        "params": [
+          "\"public\".\"native_attachments\"",
+          "r",
+          "p"
+        ],
+        "expectation": {
+          "expects": "present",
+          "object": "table \"native_attachments\""
+        }
+      }
+    ]
+  },
+  {
+    "id": "table.native_messages",
+    "label": "Create table \"native_messages\"",
+    "summary": "Creates table \"native_messages\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "table",
+        "name": "native_messages"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure table \"native_messages\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"native_messages\""
+        ],
+        "expectation": {
+          "expects": "absent",
+          "object": "table \"native_messages\""
+        }
+      }
+    ],
+    "execute": [
+      {
+        "description": "create table \"native_messages\"",
+        "sql": "CREATE TABLE \"public\".\"native_messages\" (\n  \"box\" int4 NOT NULL,\n  \"bytes\" int4 NOT NULL,\n  \"delivery_hash\" text,\n  \"envelope_from\" text,\n  \"id\" SERIAL NOT NULL,\n  \"in_reply_to\" text,\n  \"message_id\" text,\n  \"path\" text NOT NULL,\n  \"raw\" bytea NOT NULL,\n  \"received_at\" timestamptz(6) DEFAULT (now()) NOT NULL,\n  \"seen\" bool DEFAULT false NOT NULL,\n  \"sender_address\" text,\n  \"sender_name\" text,\n  \"sent_at\" timestamptz(6) NOT NULL,\n  \"starred\" bool DEFAULT false NOT NULL,\n  \"subject\" text NOT NULL,\n  \"text_body\" text NOT NULL,\n  CONSTRAINT \"native_messages_pkey\" PRIMARY KEY (\"id\"),\n  CONSTRAINT \"native_messages_bytes_check\" CHECK ((bytes > 0)),\n  CONSTRAINT \"native_messages_path_check\" CHECK ((path = ANY (ARRAY['INBOX'::text, 'Sent'::text, 'Drafts'::text, 'Junk'::text, 'Trash'::text])))\n)",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify table \"native_messages\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_class\" AS \"c\" WHERE (\"c\".\"oid\" = to_regclass($1) AND (\"c\".\"relkind\" = $2 OR \"c\".\"relkind\" = $3))) AS \"result\"",
+        "params": [
+          "\"public\".\"native_messages\"",
+          "r",
+          "p"
+        ],
+        "expectation": {
+          "expects": "present",
+          "object": "table \"native_messages\""
+        }
+      }
+    ]
+  },
+  {
+    "id": "table.native_send_attempts",
+    "label": "Create table \"native_send_attempts\"",
+    "summary": "Creates table \"native_send_attempts\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "table",
+        "name": "native_send_attempts"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure table \"native_send_attempts\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"native_send_attempts\""
+        ],
+        "expectation": {
+          "expects": "absent",
+          "object": "table \"native_send_attempts\""
+        }
+      }
+    ],
+    "execute": [
+      {
+        "description": "create table \"native_send_attempts\"",
+        "sql": "CREATE TABLE \"public\".\"native_send_attempts\" (\n  \"at\" timestamptz(6) DEFAULT (now()) NOT NULL,\n  \"box\" int4 NOT NULL,\n  \"id\" SERIAL NOT NULL,\n  \"recipients\" int4 NOT NULL,\n  \"status\" text DEFAULT 'unknown' NOT NULL,\n  CONSTRAINT \"native_send_attempts_pkey\" PRIMARY KEY (\"id\"),\n  CONSTRAINT \"native_send_attempts_recipients_check\" CHECK ((recipients > 0)),\n  CONSTRAINT \"native_send_attempts_status_check\" CHECK ((status = ANY (ARRAY['unknown'::text, 'submitted'::text, 'sandbox'::text])))\n)",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify table \"native_send_attempts\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_class\" AS \"c\" WHERE (\"c\".\"oid\" = to_regclass($1) AND (\"c\".\"relkind\" = $2 OR \"c\".\"relkind\" = $3))) AS \"result\"",
+        "params": [
+          "\"public\".\"native_send_attempts\"",
+          "r",
+          "p"
+        ],
+        "expectation": {
+          "expects": "present",
+          "object": "table \"native_send_attempts\""
+        }
+      }
+    ]
+  },
+  {
+    "id": "table.organizations",
+    "label": "Create table \"organizations\"",
+    "summary": "Creates table \"organizations\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "table",
+        "name": "organizations"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure table \"organizations\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"organizations\""
+        ],
+        "expectation": {
+          "expects": "absent",
+          "object": "table \"organizations\""
+        }
+      }
+    ],
+    "execute": [
+      {
+        "description": "create table \"organizations\"",
+        "sql": "CREATE TABLE \"public\".\"organizations\" (\n  \"id\" SERIAL NOT NULL,\n  \"name\" text NOT NULL,\n  CONSTRAINT \"organizations_pkey\" PRIMARY KEY (\"id\")\n)",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify table \"organizations\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_class\" AS \"c\" WHERE (\"c\".\"oid\" = to_regclass($1) AND (\"c\".\"relkind\" = $2 OR \"c\".\"relkind\" = $3))) AS \"result\"",
+        "params": [
+          "\"public\".\"organizations\"",
+          "r",
+          "p"
+        ],
+        "expectation": {
+          "expects": "present",
+          "object": "table \"organizations\""
+        }
+      }
+    ]
+  },
+  {
+    "id": "table.resets",
+    "label": "Create table \"resets\"",
+    "summary": "Creates table \"resets\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "table",
+        "name": "resets"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure table \"resets\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"resets\""
+        ],
+        "expectation": {
+          "expects": "absent",
+          "object": "table \"resets\""
+        }
+      }
+    ],
+    "execute": [
+      {
+        "description": "create table \"resets\"",
+        "sql": "CREATE TABLE \"public\".\"resets\" (\n  \"expires\" timestamptz(6) NOT NULL,\n  \"token\" text NOT NULL,\n  \"uid\" int4 NOT NULL,\n  CONSTRAINT \"resets_pkey\" PRIMARY KEY (\"token\")\n)",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify table \"resets\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_class\" AS \"c\" WHERE (\"c\".\"oid\" = to_regclass($1) AND (\"c\".\"relkind\" = $2 OR \"c\".\"relkind\" = $3))) AS \"result\"",
+        "params": [
+          "\"public\".\"resets\"",
+          "r",
+          "p"
+        ],
+        "expectation": {
+          "expects": "present",
+          "object": "table \"resets\""
+        }
+      }
+    ]
+  },
+  {
+    "id": "table.schools",
+    "label": "Create table \"schools\"",
+    "summary": "Creates table \"schools\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "table",
+        "name": "schools"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure table \"schools\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"schools\""
+        ],
+        "expectation": {
+          "expects": "absent",
+          "object": "table \"schools\""
+        }
+      }
+    ],
+    "execute": [
+      {
+        "description": "create table \"schools\"",
+        "sql": "CREATE TABLE \"public\".\"schools\" (\n  \"id\" SERIAL NOT NULL,\n  \"name\" text NOT NULL,\n  \"org\" int4 NOT NULL,\n  CONSTRAINT \"schools_pkey\" PRIMARY KEY (\"id\")\n)",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify table \"schools\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_class\" AS \"c\" WHERE (\"c\".\"oid\" = to_regclass($1) AND (\"c\".\"relkind\" = $2 OR \"c\".\"relkind\" = $3))) AS \"result\"",
+        "params": [
+          "\"public\".\"schools\"",
+          "r",
+          "p"
+        ],
+        "expectation": {
+          "expects": "present",
+          "object": "table \"schools\""
+        }
+      }
+    ]
+  },
+  {
+    "id": "table.senders",
+    "label": "Create table \"senders\"",
+    "summary": "Creates table \"senders\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "table",
+        "name": "senders"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure table \"senders\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"senders\""
+        ],
+        "expectation": {
+          "expects": "absent",
+          "object": "table \"senders\""
+        }
+      }
+    ],
+    "execute": [
+      {
+        "description": "create table \"senders\"",
+        "sql": "CREATE TABLE \"public\".\"senders\" (\n  \"active\" bool DEFAULT true NOT NULL,\n  \"address\" text NOT NULL,\n  \"id\" SERIAL NOT NULL,\n  \"kind\" text NOT NULL,\n  \"org\" int4 NOT NULL,\n  \"reply_to\" text NOT NULL,\n  CONSTRAINT \"senders_pkey\" PRIMARY KEY (\"id\"),\n  CONSTRAINT \"senders_kind_check\" CHECK ((kind = ANY (ARRAY['order'::text, 'promotion'::text])))\n)",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify table \"senders\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_class\" AS \"c\" WHERE (\"c\".\"oid\" = to_regclass($1) AND (\"c\".\"relkind\" = $2 OR \"c\".\"relkind\" = $3))) AS \"result\"",
+        "params": [
+          "\"public\".\"senders\"",
+          "r",
+          "p"
+        ],
+        "expectation": {
+          "expects": "present",
+          "object": "table \"senders\""
+        }
+      }
+    ]
+  },
+  {
+    "id": "table.sessions",
+    "label": "Create table \"sessions\"",
+    "summary": "Creates table \"sessions\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "table",
+        "name": "sessions"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure table \"sessions\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"sessions\""
+        ],
+        "expectation": {
+          "expects": "absent",
+          "object": "table \"sessions\""
+        }
+      }
+    ],
+    "execute": [
+      {
+        "description": "create table \"sessions\"",
+        "sql": "CREATE TABLE \"public\".\"sessions\" (\n  \"expires\" timestamptz(6) NOT NULL,\n  \"token\" text NOT NULL,\n  \"uid\" int4 NOT NULL,\n  CONSTRAINT \"sessions_pkey\" PRIMARY KEY (\"token\")\n)",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify table \"sessions\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_class\" AS \"c\" WHERE (\"c\".\"oid\" = to_regclass($1) AND (\"c\".\"relkind\" = $2 OR \"c\".\"relkind\" = $3))) AS \"result\"",
+        "params": [
+          "\"public\".\"sessions\"",
+          "r",
+          "p"
+        ],
+        "expectation": {
+          "expects": "present",
+          "object": "table \"sessions\""
+        }
+      }
+    ]
+  },
+  {
+    "id": "table.subscriptions",
+    "label": "Create table \"subscriptions\"",
+    "summary": "Creates table \"subscriptions\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "table",
+        "name": "subscriptions"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure table \"subscriptions\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"subscriptions\""
+        ],
+        "expectation": {
+          "expects": "absent",
+          "object": "table \"subscriptions\""
+        }
+      }
+    ],
+    "execute": [
+      {
+        "description": "create table \"subscriptions\"",
+        "sql": "CREATE TABLE \"public\".\"subscriptions\" (\n  \"allowed\" bool NOT NULL,\n  \"list\" text NOT NULL,\n  \"recipient\" text NOT NULL,\n  \"sender\" int4 NOT NULL,\n  CONSTRAINT \"subscriptions_pkey\" PRIMARY KEY (\"sender\", \"list\", \"recipient\")\n)",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify table \"subscriptions\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_class\" AS \"c\" WHERE (\"c\".\"oid\" = to_regclass($1) AND (\"c\".\"relkind\" = $2 OR \"c\".\"relkind\" = $3))) AS \"result\"",
+        "params": [
+          "\"public\".\"subscriptions\"",
+          "r",
+          "p"
+        ],
+        "expectation": {
+          "expects": "present",
+          "object": "table \"subscriptions\""
+        }
+      }
+    ]
+  },
+  {
+    "id": "table.users",
+    "label": "Create table \"users\"",
+    "summary": "Creates table \"users\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "table",
+        "name": "users"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure table \"users\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"users\""
+        ],
+        "expectation": {
+          "expects": "absent",
+          "object": "table \"users\""
+        }
+      }
+    ],
+    "execute": [
+      {
+        "description": "create table \"users\"",
+        "sql": "CREATE TABLE \"public\".\"users\" (\n  \"active\" bool DEFAULT true NOT NULL,\n  \"auth_kind\" text DEFAULT 'local' NOT NULL,\n  \"email\" text NOT NULL,\n  \"id\" SERIAL NOT NULL,\n  \"name\" text NOT NULL,\n  \"org\" int4 NOT NULL,\n  \"password\" text,\n  \"recovery\" text,\n  \"role\" text DEFAULT 'user' NOT NULL,\n  \"school\" int4,\n  \"source_email\" text,\n  \"source_project\" text,\n  \"source_user_id\" text,\n  CONSTRAINT \"users_pkey\" PRIMARY KEY (\"id\"),\n  CONSTRAINT \"users_auth_identity\" CHECK ((((auth_kind = ANY (ARRAY['local'::text, 'staff'::text])) AND (source_project IS NULL) AND (source_user_id IS NULL)) OR ((auth_kind = ANY (ARRAY['ednevnik'::text, 'formapoint'::text])) AND (source_project IS NOT NULL) AND (source_user_id IS NOT NULL) AND (password IS NULL)))),\n  CONSTRAINT \"users_auth_kind_check\" CHECK ((auth_kind = ANY (ARRAY['local'::text, 'staff'::text, 'ednevnik'::text, 'formapoint'::text]))),\n  CONSTRAINT \"users_check\" CHECK (((source_email IS NULL) OR ((auth_kind = 'formapoint'::text) AND (source_email = lower(source_email))))),\n  CONSTRAINT \"users_email_check\" CHECK ((email = lower(email))),\n  CONSTRAINT \"users_role_check\" CHECK ((role = ANY (ARRAY['root'::text, 'admin'::text, 'user'::text])))\n)",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify table \"users\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_class\" AS \"c\" WHERE (\"c\".\"oid\" = to_regclass($1) AND (\"c\".\"relkind\" = $2 OR \"c\".\"relkind\" = $3))) AS \"result\"",
+        "params": [
+          "\"public\".\"users\"",
+          "r",
+          "p"
+        ],
+        "expectation": {
+          "expects": "present",
+          "object": "table \"users\""
+        }
+      }
+    ]
+  },
+  {
+    "id": "unique.contacts.contacts_uid_email_key",
+    "label": "Add unique constraint on \"contacts\" (uid, email)",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "unique",
+        "name": "contacts_uid_email_key",
+        "table": "contacts"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure constraint \"contacts_uid_email_key\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "contacts_uid_email_key",
+          "public",
+          "\"public\".\"contacts\""
+        ],
+        "expectation": {
+          "expects": "absent",
+          "object": "constraint \"contacts_uid_email_key\" on \"contacts\""
+        }
+      }
+    ],
+    "execute": [
+      {
+        "description": "add unique constraint \"contacts_uid_email_key\"",
+        "sql": "ALTER TABLE \"public\".\"contacts\" ADD CONSTRAINT \"contacts_uid_email_key\" UNIQUE (\"uid\", \"email\")"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify unique constraint \"contacts_uid_email_key\" exists on (uid, email)",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3) AND \"c\".\"contype\" = $4 AND (SELECT coalesce(jsonb_agg(key_attribute.attname ORDER BY key_column.position), '[]'::jsonb) FROM unnest(\"c\".\"conkey\"::int2[]) WITH ORDINALITY AS key_column(attnum, position) JOIN pg_attribute key_attribute ON key_attribute.attrelid = \"c\".\"conrelid\" AND key_attribute.attnum = key_column.attnum) = ($5)::jsonb)) AS \"result\"",
+        "params": [
+          "contacts_uid_email_key",
+          "public",
+          "\"public\".\"contacts\"",
+          "u",
+          "[\"uid\",\"email\"]"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "unique.deliveries.deliveries_sender_external_id_recipient_list_key",
+    "label": "Add unique constraint on \"deliveries\" (sender, external_id, recipient, list)",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "unique",
+        "name": "deliveries_sender_external_id_recipient_list_key",
+        "table": "deliveries"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure constraint \"deliveries_sender_external_id_recipient_list_key\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "deliveries_sender_external_id_recipient_list_key",
+          "public",
+          "\"public\".\"deliveries\""
+        ],
+        "expectation": {
+          "expects": "absent",
+          "object": "constraint \"deliveries_sender_external_id_recipient_list_key\" on \"deliveries\""
+        }
+      }
+    ],
+    "execute": [
+      {
+        "description": "add unique constraint \"deliveries_sender_external_id_recipient_list_key\"",
+        "sql": "ALTER TABLE \"public\".\"deliveries\" ADD CONSTRAINT \"deliveries_sender_external_id_recipient_list_key\" UNIQUE (\"sender\", \"external_id\", \"recipient\", \"list\")"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify unique constraint \"deliveries_sender_external_id_recipient_list_key\" exists on (sender, external_id, recipient, list)",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3) AND \"c\".\"contype\" = $4 AND (SELECT coalesce(jsonb_agg(key_attribute.attname ORDER BY key_column.position), '[]'::jsonb) FROM unnest(\"c\".\"conkey\"::int2[]) WITH ORDINALITY AS key_column(attnum, position) JOIN pg_attribute key_attribute ON key_attribute.attrelid = \"c\".\"conrelid\" AND key_attribute.attnum = key_column.attnum) = ($5)::jsonb)) AS \"result\"",
+        "params": [
+          "deliveries_sender_external_id_recipient_list_key",
+          "public",
+          "\"public\".\"deliveries\"",
+          "u",
+          "[\"sender\",\"external_id\",\"recipient\",\"list\"]"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "unique.directory_identities.directory_identities_uid_key",
+    "label": "Add unique constraint on \"directory_identities\" (uid)",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "unique",
+        "name": "directory_identities_uid_key",
+        "table": "directory_identities"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure constraint \"directory_identities_uid_key\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "directory_identities_uid_key",
+          "public",
+          "\"public\".\"directory_identities\""
+        ],
+        "expectation": {
+          "expects": "absent",
+          "object": "constraint \"directory_identities_uid_key\" on \"directory_identities\""
+        }
+      }
+    ],
+    "execute": [
+      {
+        "description": "add unique constraint \"directory_identities_uid_key\"",
+        "sql": "ALTER TABLE \"public\".\"directory_identities\" ADD CONSTRAINT \"directory_identities_uid_key\" UNIQUE (\"uid\")"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify unique constraint \"directory_identities_uid_key\" exists on (uid)",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3) AND \"c\".\"contype\" = $4 AND (SELECT coalesce(jsonb_agg(key_attribute.attname ORDER BY key_column.position), '[]'::jsonb) FROM unnest(\"c\".\"conkey\"::int2[]) WITH ORDINALITY AS key_column(attnum, position) JOIN pg_attribute key_attribute ON key_attribute.attrelid = \"c\".\"conrelid\" AND key_attribute.attnum = key_column.attnum) = ($5)::jsonb)) AS \"result\"",
+        "params": [
+          "directory_identities_uid_key",
+          "public",
+          "\"public\".\"directory_identities\"",
+          "u",
+          "[\"uid\"]"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "unique.directory_schools.directory_schools_school_key",
+    "label": "Add unique constraint on \"directory_schools\" (school)",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "unique",
+        "name": "directory_schools_school_key",
+        "table": "directory_schools"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure constraint \"directory_schools_school_key\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "directory_schools_school_key",
+          "public",
+          "\"public\".\"directory_schools\""
+        ],
+        "expectation": {
+          "expects": "absent",
+          "object": "constraint \"directory_schools_school_key\" on \"directory_schools\""
+        }
+      }
+    ],
+    "execute": [
+      {
+        "description": "add unique constraint \"directory_schools_school_key\"",
+        "sql": "ALTER TABLE \"public\".\"directory_schools\" ADD CONSTRAINT \"directory_schools_school_key\" UNIQUE (\"school\")"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify unique constraint \"directory_schools_school_key\" exists on (school)",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3) AND \"c\".\"contype\" = $4 AND (SELECT coalesce(jsonb_agg(key_attribute.attname ORDER BY key_column.position), '[]'::jsonb) FROM unnest(\"c\".\"conkey\"::int2[]) WITH ORDINALITY AS key_column(attnum, position) JOIN pg_attribute key_attribute ON key_attribute.attrelid = \"c\".\"conrelid\" AND key_attribute.attnum = key_column.attnum) = ($5)::jsonb)) AS \"result\"",
+        "params": [
+          "directory_schools_school_key",
+          "public",
+          "\"public\".\"directory_schools\"",
+          "u",
+          "[\"school\"]"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "unique.domains.domains_org_name_key",
+    "label": "Add unique constraint on \"domains\" (org, name)",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "unique",
+        "name": "domains_org_name_key",
+        "table": "domains"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure constraint \"domains_org_name_key\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "domains_org_name_key",
+          "public",
+          "\"public\".\"domains\""
+        ],
+        "expectation": {
+          "expects": "absent",
+          "object": "constraint \"domains_org_name_key\" on \"domains\""
+        }
+      }
+    ],
+    "execute": [
+      {
+        "description": "add unique constraint \"domains_org_name_key\"",
+        "sql": "ALTER TABLE \"public\".\"domains\" ADD CONSTRAINT \"domains_org_name_key\" UNIQUE (\"org\", \"name\")"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify unique constraint \"domains_org_name_key\" exists on (org, name)",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3) AND \"c\".\"contype\" = $4 AND (SELECT coalesce(jsonb_agg(key_attribute.attname ORDER BY key_column.position), '[]'::jsonb) FROM unnest(\"c\".\"conkey\"::int2[]) WITH ORDINALITY AS key_column(attnum, position) JOIN pg_attribute key_attribute ON key_attribute.attrelid = \"c\".\"conrelid\" AND key_attribute.attnum = key_column.attnum) = ($5)::jsonb)) AS \"result\"",
+        "params": [
+          "domains_org_name_key",
+          "public",
+          "\"public\".\"domains\"",
+          "u",
+          "[\"org\",\"name\"]"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "unique.mailboxes.mailboxes_address_key",
+    "label": "Add unique constraint on \"mailboxes\" (address)",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "unique",
+        "name": "mailboxes_address_key",
+        "table": "mailboxes"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure constraint \"mailboxes_address_key\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "mailboxes_address_key",
+          "public",
+          "\"public\".\"mailboxes\""
+        ],
+        "expectation": {
+          "expects": "absent",
+          "object": "constraint \"mailboxes_address_key\" on \"mailboxes\""
+        }
+      }
+    ],
+    "execute": [
+      {
+        "description": "add unique constraint \"mailboxes_address_key\"",
+        "sql": "ALTER TABLE \"public\".\"mailboxes\" ADD CONSTRAINT \"mailboxes_address_key\" UNIQUE (\"address\")"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify unique constraint \"mailboxes_address_key\" exists on (address)",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3) AND \"c\".\"contype\" = $4 AND (SELECT coalesce(jsonb_agg(key_attribute.attname ORDER BY key_column.position), '[]'::jsonb) FROM unnest(\"c\".\"conkey\"::int2[]) WITH ORDINALITY AS key_column(attnum, position) JOIN pg_attribute key_attribute ON key_attribute.attrelid = \"c\".\"conrelid\" AND key_attribute.attnum = key_column.attnum) = ($5)::jsonb)) AS \"result\"",
+        "params": [
+          "mailboxes_address_key",
+          "public",
+          "\"public\".\"mailboxes\"",
+          "u",
+          "[\"address\"]"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "unique.mailboxes.mailboxes_org_id_key",
+    "label": "Add unique constraint on \"mailboxes\" (org, id)",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "unique",
+        "name": "mailboxes_org_id_key",
+        "table": "mailboxes"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure constraint \"mailboxes_org_id_key\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "mailboxes_org_id_key",
+          "public",
+          "\"public\".\"mailboxes\""
+        ],
+        "expectation": {
+          "expects": "absent",
+          "object": "constraint \"mailboxes_org_id_key\" on \"mailboxes\""
+        }
+      }
+    ],
+    "execute": [
+      {
+        "description": "add unique constraint \"mailboxes_org_id_key\"",
+        "sql": "ALTER TABLE \"public\".\"mailboxes\" ADD CONSTRAINT \"mailboxes_org_id_key\" UNIQUE (\"org\", \"id\")"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify unique constraint \"mailboxes_org_id_key\" exists on (org, id)",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3) AND \"c\".\"contype\" = $4 AND (SELECT coalesce(jsonb_agg(key_attribute.attname ORDER BY key_column.position), '[]'::jsonb) FROM unnest(\"c\".\"conkey\"::int2[]) WITH ORDINALITY AS key_column(attnum, position) JOIN pg_attribute key_attribute ON key_attribute.attrelid = \"c\".\"conrelid\" AND key_attribute.attnum = key_column.attnum) = ($5)::jsonb)) AS \"result\"",
+        "params": [
+          "mailboxes_org_id_key",
+          "public",
+          "\"public\".\"mailboxes\"",
+          "u",
+          "[\"org\",\"id\"]"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "unique.native_messages.native_messages_box_delivery_hash_key",
+    "label": "Add unique constraint on \"native_messages\" (box, delivery_hash)",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "unique",
+        "name": "native_messages_box_delivery_hash_key",
+        "table": "native_messages"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure constraint \"native_messages_box_delivery_hash_key\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "native_messages_box_delivery_hash_key",
+          "public",
+          "\"public\".\"native_messages\""
+        ],
+        "expectation": {
+          "expects": "absent",
+          "object": "constraint \"native_messages_box_delivery_hash_key\" on \"native_messages\""
+        }
+      }
+    ],
+    "execute": [
+      {
+        "description": "add unique constraint \"native_messages_box_delivery_hash_key\"",
+        "sql": "ALTER TABLE \"public\".\"native_messages\" ADD CONSTRAINT \"native_messages_box_delivery_hash_key\" UNIQUE (\"box\", \"delivery_hash\")"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify unique constraint \"native_messages_box_delivery_hash_key\" exists on (box, delivery_hash)",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3) AND \"c\".\"contype\" = $4 AND (SELECT coalesce(jsonb_agg(key_attribute.attname ORDER BY key_column.position), '[]'::jsonb) FROM unnest(\"c\".\"conkey\"::int2[]) WITH ORDINALITY AS key_column(attnum, position) JOIN pg_attribute key_attribute ON key_attribute.attrelid = \"c\".\"conrelid\" AND key_attribute.attnum = key_column.attnum) = ($5)::jsonb)) AS \"result\"",
+        "params": [
+          "native_messages_box_delivery_hash_key",
+          "public",
+          "\"public\".\"native_messages\"",
+          "u",
+          "[\"box\",\"delivery_hash\"]"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "unique.organizations.organizations_name_key",
+    "label": "Add unique constraint on \"organizations\" (name)",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "unique",
+        "name": "organizations_name_key",
+        "table": "organizations"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure constraint \"organizations_name_key\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "organizations_name_key",
+          "public",
+          "\"public\".\"organizations\""
+        ],
+        "expectation": {
+          "expects": "absent",
+          "object": "constraint \"organizations_name_key\" on \"organizations\""
+        }
+      }
+    ],
+    "execute": [
+      {
+        "description": "add unique constraint \"organizations_name_key\"",
+        "sql": "ALTER TABLE \"public\".\"organizations\" ADD CONSTRAINT \"organizations_name_key\" UNIQUE (\"name\")"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify unique constraint \"organizations_name_key\" exists on (name)",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3) AND \"c\".\"contype\" = $4 AND (SELECT coalesce(jsonb_agg(key_attribute.attname ORDER BY key_column.position), '[]'::jsonb) FROM unnest(\"c\".\"conkey\"::int2[]) WITH ORDINALITY AS key_column(attnum, position) JOIN pg_attribute key_attribute ON key_attribute.attrelid = \"c\".\"conrelid\" AND key_attribute.attnum = key_column.attnum) = ($5)::jsonb)) AS \"result\"",
+        "params": [
+          "organizations_name_key",
+          "public",
+          "\"public\".\"organizations\"",
+          "u",
+          "[\"name\"]"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "unique.schools.schools_org_id_key",
+    "label": "Add unique constraint on \"schools\" (org, id)",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "unique",
+        "name": "schools_org_id_key",
+        "table": "schools"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure constraint \"schools_org_id_key\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "schools_org_id_key",
+          "public",
+          "\"public\".\"schools\""
+        ],
+        "expectation": {
+          "expects": "absent",
+          "object": "constraint \"schools_org_id_key\" on \"schools\""
+        }
+      }
+    ],
+    "execute": [
+      {
+        "description": "add unique constraint \"schools_org_id_key\"",
+        "sql": "ALTER TABLE \"public\".\"schools\" ADD CONSTRAINT \"schools_org_id_key\" UNIQUE (\"org\", \"id\")"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify unique constraint \"schools_org_id_key\" exists on (org, id)",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3) AND \"c\".\"contype\" = $4 AND (SELECT coalesce(jsonb_agg(key_attribute.attname ORDER BY key_column.position), '[]'::jsonb) FROM unnest(\"c\".\"conkey\"::int2[]) WITH ORDINALITY AS key_column(attnum, position) JOIN pg_attribute key_attribute ON key_attribute.attrelid = \"c\".\"conrelid\" AND key_attribute.attnum = key_column.attnum) = ($5)::jsonb)) AS \"result\"",
+        "params": [
+          "schools_org_id_key",
+          "public",
+          "\"public\".\"schools\"",
+          "u",
+          "[\"org\",\"id\"]"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "unique.schools.schools_org_name_key",
+    "label": "Add unique constraint on \"schools\" (org, name)",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "unique",
+        "name": "schools_org_name_key",
+        "table": "schools"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure constraint \"schools_org_name_key\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "schools_org_name_key",
+          "public",
+          "\"public\".\"schools\""
+        ],
+        "expectation": {
+          "expects": "absent",
+          "object": "constraint \"schools_org_name_key\" on \"schools\""
+        }
+      }
+    ],
+    "execute": [
+      {
+        "description": "add unique constraint \"schools_org_name_key\"",
+        "sql": "ALTER TABLE \"public\".\"schools\" ADD CONSTRAINT \"schools_org_name_key\" UNIQUE (\"org\", \"name\")"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify unique constraint \"schools_org_name_key\" exists on (org, name)",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3) AND \"c\".\"contype\" = $4 AND (SELECT coalesce(jsonb_agg(key_attribute.attname ORDER BY key_column.position), '[]'::jsonb) FROM unnest(\"c\".\"conkey\"::int2[]) WITH ORDINALITY AS key_column(attnum, position) JOIN pg_attribute key_attribute ON key_attribute.attrelid = \"c\".\"conrelid\" AND key_attribute.attnum = key_column.attnum) = ($5)::jsonb)) AS \"result\"",
+        "params": [
+          "schools_org_name_key",
+          "public",
+          "\"public\".\"schools\"",
+          "u",
+          "[\"org\",\"name\"]"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "unique.senders.senders_address_key",
+    "label": "Add unique constraint on \"senders\" (address)",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "unique",
+        "name": "senders_address_key",
+        "table": "senders"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure constraint \"senders_address_key\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "senders_address_key",
+          "public",
+          "\"public\".\"senders\""
+        ],
+        "expectation": {
+          "expects": "absent",
+          "object": "constraint \"senders_address_key\" on \"senders\""
+        }
+      }
+    ],
+    "execute": [
+      {
+        "description": "add unique constraint \"senders_address_key\"",
+        "sql": "ALTER TABLE \"public\".\"senders\" ADD CONSTRAINT \"senders_address_key\" UNIQUE (\"address\")"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify unique constraint \"senders_address_key\" exists on (address)",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3) AND \"c\".\"contype\" = $4 AND (SELECT coalesce(jsonb_agg(key_attribute.attname ORDER BY key_column.position), '[]'::jsonb) FROM unnest(\"c\".\"conkey\"::int2[]) WITH ORDINALITY AS key_column(attnum, position) JOIN pg_attribute key_attribute ON key_attribute.attrelid = \"c\".\"conrelid\" AND key_attribute.attnum = key_column.attnum) = ($5)::jsonb)) AS \"result\"",
+        "params": [
+          "senders_address_key",
+          "public",
+          "\"public\".\"senders\"",
+          "u",
+          "[\"address\"]"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "unique.users.users_email_key",
+    "label": "Add unique constraint on \"users\" (email)",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "unique",
+        "name": "users_email_key",
+        "table": "users"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure constraint \"users_email_key\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "users_email_key",
+          "public",
+          "\"public\".\"users\""
+        ],
+        "expectation": {
+          "expects": "absent",
+          "object": "constraint \"users_email_key\" on \"users\""
+        }
+      }
+    ],
+    "execute": [
+      {
+        "description": "add unique constraint \"users_email_key\"",
+        "sql": "ALTER TABLE \"public\".\"users\" ADD CONSTRAINT \"users_email_key\" UNIQUE (\"email\")"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify unique constraint \"users_email_key\" exists on (email)",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3) AND \"c\".\"contype\" = $4 AND (SELECT coalesce(jsonb_agg(key_attribute.attname ORDER BY key_column.position), '[]'::jsonb) FROM unnest(\"c\".\"conkey\"::int2[]) WITH ORDINALITY AS key_column(attnum, position) JOIN pg_attribute key_attribute ON key_attribute.attrelid = \"c\".\"conrelid\" AND key_attribute.attnum = key_column.attnum) = ($5)::jsonb)) AS \"result\"",
+        "params": [
+          "users_email_key",
+          "public",
+          "\"public\".\"users\"",
+          "u",
+          "[\"email\"]"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "index.deliveries.deliveries_order_event",
+    "label": "Create index \"deliveries_order_event\" on \"deliveries\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "index",
+        "name": "deliveries_order_event",
+        "table": "deliveries"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure index \"deliveries_order_event\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"deliveries_order_event\""
+        ],
+        "expectation": {
+          "expects": "absent",
+          "object": "index \"deliveries_order_event\""
+        }
+      }
+    ],
+    "execute": [
+      {
+        "description": "create index \"deliveries_order_event\"",
+        "sql": "CREATE UNIQUE INDEX \"deliveries_order_event\" ON \"public\".\"deliveries\" (\"sender\", \"external_id\") WHERE ((list = ''::text))",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify index \"deliveries_order_event\" exists on \"deliveries\" with the planned definition",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_class\" AS \"c\" INNER JOIN \"pg_index\" AS \"i\" ON \"i\".\"indexrelid\" = \"c\".\"oid\" INNER JOIN \"pg_am\" AS \"m\" ON \"m\".\"oid\" = \"c\".\"relam\" WHERE (\"c\".\"oid\" = to_regclass($1) AND (\"c\".\"relkind\" = $2 OR \"c\".\"relkind\" = $3) AND \"i\".\"indrelid\" = to_regclass($4) AND \"i\".\"indisunique\" AND \"m\".\"amname\" = $5 AND (\"i\".\"indexprs\" IS NULL AND (SELECT coalesce(jsonb_agg(key_attribute.attname ORDER BY key_column.position), '[]'::jsonb) FROM unnest(\"i\".\"indkey\"::int2[]) WITH ORDINALITY AS key_column(attnum, position) JOIN pg_attribute key_attribute ON key_attribute.attrelid = \"i\".\"indrelid\" AND key_attribute.attnum = key_column.attnum) = ($6)::jsonb) AND \"i\".\"indpred\" IS NOT NULL)) AS \"result\"",
+        "params": [
+          "\"public\".\"deliveries_order_event\"",
+          "i",
+          "I",
+          "\"public\".\"deliveries\"",
+          "btree",
+          "[\"sender\",\"external_id\"]"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "index.native_messages.native_messages_folder",
+    "label": "Create index \"native_messages_folder\" on \"native_messages\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "index",
+        "name": "native_messages_folder",
+        "table": "native_messages"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure index \"native_messages_folder\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"native_messages_folder\""
+        ],
+        "expectation": {
+          "expects": "absent",
+          "object": "index \"native_messages_folder\""
+        }
+      }
+    ],
+    "execute": [
+      {
+        "description": "create index \"native_messages_folder\"",
+        "sql": "CREATE INDEX \"native_messages_folder\" ON \"public\".\"native_messages\" (\"box\", \"path\", \"sent_at\", \"id\")",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify index \"native_messages_folder\" exists on \"native_messages\" with the planned definition",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_class\" AS \"c\" INNER JOIN \"pg_index\" AS \"i\" ON \"i\".\"indexrelid\" = \"c\".\"oid\" INNER JOIN \"pg_am\" AS \"m\" ON \"m\".\"oid\" = \"c\".\"relam\" WHERE (\"c\".\"oid\" = to_regclass($1) AND (\"c\".\"relkind\" = $2 OR \"c\".\"relkind\" = $3) AND \"i\".\"indrelid\" = to_regclass($4) AND NOT (\"i\".\"indisunique\") AND \"m\".\"amname\" = $5 AND (\"i\".\"indexprs\" IS NULL AND (SELECT coalesce(jsonb_agg(key_attribute.attname ORDER BY key_column.position), '[]'::jsonb) FROM unnest(\"i\".\"indkey\"::int2[]) WITH ORDINALITY AS key_column(attnum, position) JOIN pg_attribute key_attribute ON key_attribute.attrelid = \"i\".\"indrelid\" AND key_attribute.attnum = key_column.attnum) = ($6)::jsonb) AND \"i\".\"indpred\" IS NULL)) AS \"result\"",
+        "params": [
+          "\"public\".\"native_messages_folder\"",
+          "i",
+          "I",
+          "\"public\".\"native_messages\"",
+          "btree",
+          "[\"box\",\"path\",\"sent_at\",\"id\"]"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "index.native_send_attempts.native_send_attempts_at",
+    "label": "Create index \"native_send_attempts_at\" on \"native_send_attempts\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "index",
+        "name": "native_send_attempts_at",
+        "table": "native_send_attempts"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure index \"native_send_attempts_at\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"native_send_attempts_at\""
+        ],
+        "expectation": {
+          "expects": "absent",
+          "object": "index \"native_send_attempts_at\""
+        }
+      }
+    ],
+    "execute": [
+      {
+        "description": "create index \"native_send_attempts_at\"",
+        "sql": "CREATE INDEX \"native_send_attempts_at\" ON \"public\".\"native_send_attempts\" (\"at\")",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify index \"native_send_attempts_at\" exists on \"native_send_attempts\" with the planned definition",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_class\" AS \"c\" INNER JOIN \"pg_index\" AS \"i\" ON \"i\".\"indexrelid\" = \"c\".\"oid\" INNER JOIN \"pg_am\" AS \"m\" ON \"m\".\"oid\" = \"c\".\"relam\" WHERE (\"c\".\"oid\" = to_regclass($1) AND (\"c\".\"relkind\" = $2 OR \"c\".\"relkind\" = $3) AND \"i\".\"indrelid\" = to_regclass($4) AND NOT (\"i\".\"indisunique\") AND \"m\".\"amname\" = $5 AND (\"i\".\"indexprs\" IS NULL AND (SELECT coalesce(jsonb_agg(key_attribute.attname ORDER BY key_column.position), '[]'::jsonb) FROM unnest(\"i\".\"indkey\"::int2[]) WITH ORDINALITY AS key_column(attnum, position) JOIN pg_attribute key_attribute ON key_attribute.attrelid = \"i\".\"indrelid\" AND key_attribute.attnum = key_column.attnum) = ($6)::jsonb) AND \"i\".\"indpred\" IS NULL)) AS \"result\"",
+        "params": [
+          "\"public\".\"native_send_attempts_at\"",
+          "i",
+          "I",
+          "\"public\".\"native_send_attempts\"",
+          "btree",
+          "[\"at\"]"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "index.users.users_source_email",
+    "label": "Create index \"users_source_email\" on \"users\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "index",
+        "name": "users_source_email",
+        "table": "users"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure index \"users_source_email\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"users_source_email\""
+        ],
+        "expectation": {
+          "expects": "absent",
+          "object": "index \"users_source_email\""
+        }
+      }
+    ],
+    "execute": [
+      {
+        "description": "create index \"users_source_email\"",
+        "sql": "CREATE UNIQUE INDEX \"users_source_email\" ON \"public\".\"users\" (\"source_email\") WHERE ((source_email IS NOT NULL))",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify index \"users_source_email\" exists on \"users\" with the planned definition",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_class\" AS \"c\" INNER JOIN \"pg_index\" AS \"i\" ON \"i\".\"indexrelid\" = \"c\".\"oid\" INNER JOIN \"pg_am\" AS \"m\" ON \"m\".\"oid\" = \"c\".\"relam\" WHERE (\"c\".\"oid\" = to_regclass($1) AND (\"c\".\"relkind\" = $2 OR \"c\".\"relkind\" = $3) AND \"i\".\"indrelid\" = to_regclass($4) AND \"i\".\"indisunique\" AND \"m\".\"amname\" = $5 AND (\"i\".\"indexprs\" IS NULL AND (SELECT coalesce(jsonb_agg(key_attribute.attname ORDER BY key_column.position), '[]'::jsonb) FROM unnest(\"i\".\"indkey\"::int2[]) WITH ORDINALITY AS key_column(attnum, position) JOIN pg_attribute key_attribute ON key_attribute.attrelid = \"i\".\"indrelid\" AND key_attribute.attnum = key_column.attnum) = ($6)::jsonb) AND \"i\".\"indpred\" IS NOT NULL)) AS \"result\"",
+        "params": [
+          "\"public\".\"users_source_email\"",
+          "i",
+          "I",
+          "\"public\".\"users\"",
+          "btree",
+          "[\"source_email\"]"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "index.users.users_source_identity",
+    "label": "Create index \"users_source_identity\" on \"users\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "index",
+        "name": "users_source_identity",
+        "table": "users"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure index \"users_source_identity\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"users_source_identity\""
+        ],
+        "expectation": {
+          "expects": "absent",
+          "object": "index \"users_source_identity\""
+        }
+      }
+    ],
+    "execute": [
+      {
+        "description": "create index \"users_source_identity\"",
+        "sql": "CREATE UNIQUE INDEX \"users_source_identity\" ON \"public\".\"users\" (\"source_project\", \"source_user_id\")",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify index \"users_source_identity\" exists on \"users\" with the planned definition",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_class\" AS \"c\" INNER JOIN \"pg_index\" AS \"i\" ON \"i\".\"indexrelid\" = \"c\".\"oid\" INNER JOIN \"pg_am\" AS \"m\" ON \"m\".\"oid\" = \"c\".\"relam\" WHERE (\"c\".\"oid\" = to_regclass($1) AND (\"c\".\"relkind\" = $2 OR \"c\".\"relkind\" = $3) AND \"i\".\"indrelid\" = to_regclass($4) AND \"i\".\"indisunique\" AND \"m\".\"amname\" = $5 AND (\"i\".\"indexprs\" IS NULL AND (SELECT coalesce(jsonb_agg(key_attribute.attname ORDER BY key_column.position), '[]'::jsonb) FROM unnest(\"i\".\"indkey\"::int2[]) WITH ORDINALITY AS key_column(attnum, position) JOIN pg_attribute key_attribute ON key_attribute.attrelid = \"i\".\"indrelid\" AND key_attribute.attnum = key_column.attnum) = ($6)::jsonb) AND \"i\".\"indpred\" IS NULL)) AS \"result\"",
+        "params": [
+          "\"public\".\"users_source_identity\"",
+          "i",
+          "I",
+          "\"public\".\"users\"",
+          "btree",
+          "[\"source_project\",\"source_user_id\"]"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "foreignKey.aliases.aliases_box_fkey",
+    "label": "Add foreign key \"aliases_box_fkey\" on \"aliases\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "foreignKey",
+        "name": "aliases_box_fkey",
+        "table": "aliases"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure FK \"aliases_box_fkey\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "aliases_box_fkey",
+          "public",
+          "\"public\".\"aliases\""
+        ],
+        "expectation": {
+          "expects": "absent",
+          "object": "FK \"aliases_box_fkey\" on \"aliases\""
+        }
+      }
+    ],
+    "execute": [
+      {
+        "description": "add FK \"aliases_box_fkey\"",
+        "sql": "ALTER TABLE \"public\".\"aliases\"\nADD CONSTRAINT \"aliases_box_fkey\"\nFOREIGN KEY (\"box\")\nREFERENCES \"public\".\"mailboxes\" (\"id\")\nON DELETE CASCADE"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify FK \"aliases_box_fkey\" exists with the planned columns, referenced table and actions",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3) AND \"c\".\"contype\" = $4 AND (SELECT coalesce(jsonb_agg(key_attribute.attname ORDER BY key_column.position), '[]'::jsonb) FROM unnest(\"c\".\"conkey\"::int2[]) WITH ORDINALITY AS key_column(attnum, position) JOIN pg_attribute key_attribute ON key_attribute.attrelid = \"c\".\"conrelid\" AND key_attribute.attnum = key_column.attnum) = ($5)::jsonb AND \"c\".\"confrelid\" = to_regclass($6) AND (SELECT coalesce(jsonb_agg(key_attribute.attname ORDER BY key_column.position), '[]'::jsonb) FROM unnest(\"c\".\"confkey\"::int2[]) WITH ORDINALITY AS key_column(attnum, position) JOIN pg_attribute key_attribute ON key_attribute.attrelid = \"c\".\"confrelid\" AND key_attribute.attnum = key_column.attnum) = ($7)::jsonb AND \"c\".\"confdeltype\" = $8 AND \"c\".\"confupdtype\" = $9)) AS \"result\"",
+        "params": [
+          "aliases_box_fkey",
+          "public",
+          "\"public\".\"aliases\"",
+          "f",
+          "[\"box\"]",
+          "\"public\".\"mailboxes\"",
+          "[\"id\"]",
+          "c",
+          "a"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "foreignKey.audits.audits_uid_fkey",
+    "label": "Add foreign key \"audits_uid_fkey\" on \"audits\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "foreignKey",
+        "name": "audits_uid_fkey",
+        "table": "audits"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure FK \"audits_uid_fkey\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "audits_uid_fkey",
+          "public",
+          "\"public\".\"audits\""
+        ],
+        "expectation": {
+          "expects": "absent",
+          "object": "FK \"audits_uid_fkey\" on \"audits\""
+        }
+      }
+    ],
+    "execute": [
+      {
+        "description": "add FK \"audits_uid_fkey\"",
+        "sql": "ALTER TABLE \"public\".\"audits\"\nADD CONSTRAINT \"audits_uid_fkey\"\nFOREIGN KEY (\"uid\")\nREFERENCES \"public\".\"users\" (\"id\")"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify FK \"audits_uid_fkey\" exists with the planned columns, referenced table and actions",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3) AND \"c\".\"contype\" = $4 AND (SELECT coalesce(jsonb_agg(key_attribute.attname ORDER BY key_column.position), '[]'::jsonb) FROM unnest(\"c\".\"conkey\"::int2[]) WITH ORDINALITY AS key_column(attnum, position) JOIN pg_attribute key_attribute ON key_attribute.attrelid = \"c\".\"conrelid\" AND key_attribute.attnum = key_column.attnum) = ($5)::jsonb AND \"c\".\"confrelid\" = to_regclass($6) AND (SELECT coalesce(jsonb_agg(key_attribute.attname ORDER BY key_column.position), '[]'::jsonb) FROM unnest(\"c\".\"confkey\"::int2[]) WITH ORDINALITY AS key_column(attnum, position) JOIN pg_attribute key_attribute ON key_attribute.attrelid = \"c\".\"confrelid\" AND key_attribute.attnum = key_column.attnum) = ($7)::jsonb AND \"c\".\"confdeltype\" = $8 AND \"c\".\"confupdtype\" = $9)) AS \"result\"",
+        "params": [
+          "audits_uid_fkey",
+          "public",
+          "\"public\".\"audits\"",
+          "f",
+          "[\"uid\"]",
+          "\"public\".\"users\"",
+          "[\"id\"]",
+          "a",
+          "a"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "foreignKey.contacts.contacts_uid_fkey",
+    "label": "Add foreign key \"contacts_uid_fkey\" on \"contacts\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "foreignKey",
+        "name": "contacts_uid_fkey",
+        "table": "contacts"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure FK \"contacts_uid_fkey\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "contacts_uid_fkey",
+          "public",
+          "\"public\".\"contacts\""
+        ],
+        "expectation": {
+          "expects": "absent",
+          "object": "FK \"contacts_uid_fkey\" on \"contacts\""
+        }
+      }
+    ],
+    "execute": [
+      {
+        "description": "add FK \"contacts_uid_fkey\"",
+        "sql": "ALTER TABLE \"public\".\"contacts\"\nADD CONSTRAINT \"contacts_uid_fkey\"\nFOREIGN KEY (\"uid\")\nREFERENCES \"public\".\"users\" (\"id\")\nON DELETE CASCADE"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify FK \"contacts_uid_fkey\" exists with the planned columns, referenced table and actions",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3) AND \"c\".\"contype\" = $4 AND (SELECT coalesce(jsonb_agg(key_attribute.attname ORDER BY key_column.position), '[]'::jsonb) FROM unnest(\"c\".\"conkey\"::int2[]) WITH ORDINALITY AS key_column(attnum, position) JOIN pg_attribute key_attribute ON key_attribute.attrelid = \"c\".\"conrelid\" AND key_attribute.attnum = key_column.attnum) = ($5)::jsonb AND \"c\".\"confrelid\" = to_regclass($6) AND (SELECT coalesce(jsonb_agg(key_attribute.attname ORDER BY key_column.position), '[]'::jsonb) FROM unnest(\"c\".\"confkey\"::int2[]) WITH ORDINALITY AS key_column(attnum, position) JOIN pg_attribute key_attribute ON key_attribute.attrelid = \"c\".\"confrelid\" AND key_attribute.attnum = key_column.attnum) = ($7)::jsonb AND \"c\".\"confdeltype\" = $8 AND \"c\".\"confupdtype\" = $9)) AS \"result\"",
+        "params": [
+          "contacts_uid_fkey",
+          "public",
+          "\"public\".\"contacts\"",
+          "f",
+          "[\"uid\"]",
+          "\"public\".\"users\"",
+          "[\"id\"]",
+          "c",
+          "a"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "foreignKey.deliveries.deliveries_sender_fkey",
+    "label": "Add foreign key \"deliveries_sender_fkey\" on \"deliveries\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "foreignKey",
+        "name": "deliveries_sender_fkey",
+        "table": "deliveries"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure FK \"deliveries_sender_fkey\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "deliveries_sender_fkey",
+          "public",
+          "\"public\".\"deliveries\""
+        ],
+        "expectation": {
+          "expects": "absent",
+          "object": "FK \"deliveries_sender_fkey\" on \"deliveries\""
+        }
+      }
+    ],
+    "execute": [
+      {
+        "description": "add FK \"deliveries_sender_fkey\"",
+        "sql": "ALTER TABLE \"public\".\"deliveries\"\nADD CONSTRAINT \"deliveries_sender_fkey\"\nFOREIGN KEY (\"sender\")\nREFERENCES \"public\".\"senders\" (\"id\")"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify FK \"deliveries_sender_fkey\" exists with the planned columns, referenced table and actions",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3) AND \"c\".\"contype\" = $4 AND (SELECT coalesce(jsonb_agg(key_attribute.attname ORDER BY key_column.position), '[]'::jsonb) FROM unnest(\"c\".\"conkey\"::int2[]) WITH ORDINALITY AS key_column(attnum, position) JOIN pg_attribute key_attribute ON key_attribute.attrelid = \"c\".\"conrelid\" AND key_attribute.attnum = key_column.attnum) = ($5)::jsonb AND \"c\".\"confrelid\" = to_regclass($6) AND (SELECT coalesce(jsonb_agg(key_attribute.attname ORDER BY key_column.position), '[]'::jsonb) FROM unnest(\"c\".\"confkey\"::int2[]) WITH ORDINALITY AS key_column(attnum, position) JOIN pg_attribute key_attribute ON key_attribute.attrelid = \"c\".\"confrelid\" AND key_attribute.attnum = key_column.attnum) = ($7)::jsonb AND \"c\".\"confdeltype\" = $8 AND \"c\".\"confupdtype\" = $9)) AS \"result\"",
+        "params": [
+          "deliveries_sender_fkey",
+          "public",
+          "\"public\".\"deliveries\"",
+          "f",
+          "[\"sender\"]",
+          "\"public\".\"senders\"",
+          "[\"id\"]",
+          "a",
+          "a"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "foreignKey.directory_identities.directory_identities_uid_fkey",
+    "label": "Add foreign key \"directory_identities_uid_fkey\" on \"directory_identities\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "foreignKey",
+        "name": "directory_identities_uid_fkey",
+        "table": "directory_identities"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure FK \"directory_identities_uid_fkey\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "directory_identities_uid_fkey",
+          "public",
+          "\"public\".\"directory_identities\""
+        ],
+        "expectation": {
+          "expects": "absent",
+          "object": "FK \"directory_identities_uid_fkey\" on \"directory_identities\""
+        }
+      }
+    ],
+    "execute": [
+      {
+        "description": "add FK \"directory_identities_uid_fkey\"",
+        "sql": "ALTER TABLE \"public\".\"directory_identities\"\nADD CONSTRAINT \"directory_identities_uid_fkey\"\nFOREIGN KEY (\"uid\")\nREFERENCES \"public\".\"users\" (\"id\")\nON DELETE CASCADE"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify FK \"directory_identities_uid_fkey\" exists with the planned columns, referenced table and actions",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3) AND \"c\".\"contype\" = $4 AND (SELECT coalesce(jsonb_agg(key_attribute.attname ORDER BY key_column.position), '[]'::jsonb) FROM unnest(\"c\".\"conkey\"::int2[]) WITH ORDINALITY AS key_column(attnum, position) JOIN pg_attribute key_attribute ON key_attribute.attrelid = \"c\".\"conrelid\" AND key_attribute.attnum = key_column.attnum) = ($5)::jsonb AND \"c\".\"confrelid\" = to_regclass($6) AND (SELECT coalesce(jsonb_agg(key_attribute.attname ORDER BY key_column.position), '[]'::jsonb) FROM unnest(\"c\".\"confkey\"::int2[]) WITH ORDINALITY AS key_column(attnum, position) JOIN pg_attribute key_attribute ON key_attribute.attrelid = \"c\".\"confrelid\" AND key_attribute.attnum = key_column.attnum) = ($7)::jsonb AND \"c\".\"confdeltype\" = $8 AND \"c\".\"confupdtype\" = $9)) AS \"result\"",
+        "params": [
+          "directory_identities_uid_fkey",
+          "public",
+          "\"public\".\"directory_identities\"",
+          "f",
+          "[\"uid\"]",
+          "\"public\".\"users\"",
+          "[\"id\"]",
+          "c",
+          "a"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "foreignKey.directory_school_memberships.directory_school_memberships_school_fkey",
+    "label": "Add foreign key \"directory_school_memberships_school_fkey\" on \"directory_school_memberships\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "foreignKey",
+        "name": "directory_school_memberships_school_fkey",
+        "table": "directory_school_memberships"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure FK \"directory_school_memberships_school_fkey\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "directory_school_memberships_school_fkey",
+          "public",
+          "\"public\".\"directory_school_memberships\""
+        ],
+        "expectation": {
+          "expects": "absent",
+          "object": "FK \"directory_school_memberships_school_fkey\" on \"directory_school_memberships\""
+        }
+      }
+    ],
+    "execute": [
+      {
+        "description": "add FK \"directory_school_memberships_school_fkey\"",
+        "sql": "ALTER TABLE \"public\".\"directory_school_memberships\"\nADD CONSTRAINT \"directory_school_memberships_school_fkey\"\nFOREIGN KEY (\"school\")\nREFERENCES \"public\".\"schools\" (\"id\")\nON DELETE CASCADE"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify FK \"directory_school_memberships_school_fkey\" exists with the planned columns, referenced table and actions",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3) AND \"c\".\"contype\" = $4 AND (SELECT coalesce(jsonb_agg(key_attribute.attname ORDER BY key_column.position), '[]'::jsonb) FROM unnest(\"c\".\"conkey\"::int2[]) WITH ORDINALITY AS key_column(attnum, position) JOIN pg_attribute key_attribute ON key_attribute.attrelid = \"c\".\"conrelid\" AND key_attribute.attnum = key_column.attnum) = ($5)::jsonb AND \"c\".\"confrelid\" = to_regclass($6) AND (SELECT coalesce(jsonb_agg(key_attribute.attname ORDER BY key_column.position), '[]'::jsonb) FROM unnest(\"c\".\"confkey\"::int2[]) WITH ORDINALITY AS key_column(attnum, position) JOIN pg_attribute key_attribute ON key_attribute.attrelid = \"c\".\"confrelid\" AND key_attribute.attnum = key_column.attnum) = ($7)::jsonb AND \"c\".\"confdeltype\" = $8 AND \"c\".\"confupdtype\" = $9)) AS \"result\"",
+        "params": [
+          "directory_school_memberships_school_fkey",
+          "public",
+          "\"public\".\"directory_school_memberships\"",
+          "f",
+          "[\"school\"]",
+          "\"public\".\"schools\"",
+          "[\"id\"]",
+          "c",
+          "a"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "foreignKey.directory_school_memberships.directory_school_memberships_uid_fkey",
+    "label": "Add foreign key \"directory_school_memberships_uid_fkey\" on \"directory_school_memberships\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "foreignKey",
+        "name": "directory_school_memberships_uid_fkey",
+        "table": "directory_school_memberships"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure FK \"directory_school_memberships_uid_fkey\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "directory_school_memberships_uid_fkey",
+          "public",
+          "\"public\".\"directory_school_memberships\""
+        ],
+        "expectation": {
+          "expects": "absent",
+          "object": "FK \"directory_school_memberships_uid_fkey\" on \"directory_school_memberships\""
+        }
+      }
+    ],
+    "execute": [
+      {
+        "description": "add FK \"directory_school_memberships_uid_fkey\"",
+        "sql": "ALTER TABLE \"public\".\"directory_school_memberships\"\nADD CONSTRAINT \"directory_school_memberships_uid_fkey\"\nFOREIGN KEY (\"uid\")\nREFERENCES \"public\".\"directory_identities\" (\"uid\")\nON DELETE CASCADE"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify FK \"directory_school_memberships_uid_fkey\" exists with the planned columns, referenced table and actions",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3) AND \"c\".\"contype\" = $4 AND (SELECT coalesce(jsonb_agg(key_attribute.attname ORDER BY key_column.position), '[]'::jsonb) FROM unnest(\"c\".\"conkey\"::int2[]) WITH ORDINALITY AS key_column(attnum, position) JOIN pg_attribute key_attribute ON key_attribute.attrelid = \"c\".\"conrelid\" AND key_attribute.attnum = key_column.attnum) = ($5)::jsonb AND \"c\".\"confrelid\" = to_regclass($6) AND (SELECT coalesce(jsonb_agg(key_attribute.attname ORDER BY key_column.position), '[]'::jsonb) FROM unnest(\"c\".\"confkey\"::int2[]) WITH ORDINALITY AS key_column(attnum, position) JOIN pg_attribute key_attribute ON key_attribute.attrelid = \"c\".\"confrelid\" AND key_attribute.attnum = key_column.attnum) = ($7)::jsonb AND \"c\".\"confdeltype\" = $8 AND \"c\".\"confupdtype\" = $9)) AS \"result\"",
+        "params": [
+          "directory_school_memberships_uid_fkey",
+          "public",
+          "\"public\".\"directory_school_memberships\"",
+          "f",
+          "[\"uid\"]",
+          "\"public\".\"directory_identities\"",
+          "[\"uid\"]",
+          "c",
+          "a"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "foreignKey.directory_schools.directory_schools_school_fkey",
+    "label": "Add foreign key \"directory_schools_school_fkey\" on \"directory_schools\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "foreignKey",
+        "name": "directory_schools_school_fkey",
+        "table": "directory_schools"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure FK \"directory_schools_school_fkey\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "directory_schools_school_fkey",
+          "public",
+          "\"public\".\"directory_schools\""
+        ],
+        "expectation": {
+          "expects": "absent",
+          "object": "FK \"directory_schools_school_fkey\" on \"directory_schools\""
+        }
+      }
+    ],
+    "execute": [
+      {
+        "description": "add FK \"directory_schools_school_fkey\"",
+        "sql": "ALTER TABLE \"public\".\"directory_schools\"\nADD CONSTRAINT \"directory_schools_school_fkey\"\nFOREIGN KEY (\"school\")\nREFERENCES \"public\".\"schools\" (\"id\")\nON DELETE CASCADE"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify FK \"directory_schools_school_fkey\" exists with the planned columns, referenced table and actions",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3) AND \"c\".\"contype\" = $4 AND (SELECT coalesce(jsonb_agg(key_attribute.attname ORDER BY key_column.position), '[]'::jsonb) FROM unnest(\"c\".\"conkey\"::int2[]) WITH ORDINALITY AS key_column(attnum, position) JOIN pg_attribute key_attribute ON key_attribute.attrelid = \"c\".\"conrelid\" AND key_attribute.attnum = key_column.attnum) = ($5)::jsonb AND \"c\".\"confrelid\" = to_regclass($6) AND (SELECT coalesce(jsonb_agg(key_attribute.attname ORDER BY key_column.position), '[]'::jsonb) FROM unnest(\"c\".\"confkey\"::int2[]) WITH ORDINALITY AS key_column(attnum, position) JOIN pg_attribute key_attribute ON key_attribute.attrelid = \"c\".\"confrelid\" AND key_attribute.attnum = key_column.attnum) = ($7)::jsonb AND \"c\".\"confdeltype\" = $8 AND \"c\".\"confupdtype\" = $9)) AS \"result\"",
+        "params": [
+          "directory_schools_school_fkey",
+          "public",
+          "\"public\".\"directory_schools\"",
+          "f",
+          "[\"school\"]",
+          "\"public\".\"schools\"",
+          "[\"id\"]",
+          "c",
+          "a"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "foreignKey.domains.domains_org_fkey",
+    "label": "Add foreign key \"domains_org_fkey\" on \"domains\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "foreignKey",
+        "name": "domains_org_fkey",
+        "table": "domains"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure FK \"domains_org_fkey\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "domains_org_fkey",
+          "public",
+          "\"public\".\"domains\""
+        ],
+        "expectation": {
+          "expects": "absent",
+          "object": "FK \"domains_org_fkey\" on \"domains\""
+        }
+      }
+    ],
+    "execute": [
+      {
+        "description": "add FK \"domains_org_fkey\"",
+        "sql": "ALTER TABLE \"public\".\"domains\"\nADD CONSTRAINT \"domains_org_fkey\"\nFOREIGN KEY (\"org\")\nREFERENCES \"public\".\"organizations\" (\"id\")"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify FK \"domains_org_fkey\" exists with the planned columns, referenced table and actions",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3) AND \"c\".\"contype\" = $4 AND (SELECT coalesce(jsonb_agg(key_attribute.attname ORDER BY key_column.position), '[]'::jsonb) FROM unnest(\"c\".\"conkey\"::int2[]) WITH ORDINALITY AS key_column(attnum, position) JOIN pg_attribute key_attribute ON key_attribute.attrelid = \"c\".\"conrelid\" AND key_attribute.attnum = key_column.attnum) = ($5)::jsonb AND \"c\".\"confrelid\" = to_regclass($6) AND (SELECT coalesce(jsonb_agg(key_attribute.attname ORDER BY key_column.position), '[]'::jsonb) FROM unnest(\"c\".\"confkey\"::int2[]) WITH ORDINALITY AS key_column(attnum, position) JOIN pg_attribute key_attribute ON key_attribute.attrelid = \"c\".\"confrelid\" AND key_attribute.attnum = key_column.attnum) = ($7)::jsonb AND \"c\".\"confdeltype\" = $8 AND \"c\".\"confupdtype\" = $9)) AS \"result\"",
+        "params": [
+          "domains_org_fkey",
+          "public",
+          "\"public\".\"domains\"",
+          "f",
+          "[\"org\"]",
+          "\"public\".\"organizations\"",
+          "[\"id\"]",
+          "a",
+          "a"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "foreignKey.events.events_box_fkey",
+    "label": "Add foreign key \"events_box_fkey\" on \"events\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "foreignKey",
+        "name": "events_box_fkey",
+        "table": "events"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure FK \"events_box_fkey\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "events_box_fkey",
+          "public",
+          "\"public\".\"events\""
+        ],
+        "expectation": {
+          "expects": "absent",
+          "object": "FK \"events_box_fkey\" on \"events\""
+        }
+      }
+    ],
+    "execute": [
+      {
+        "description": "add FK \"events_box_fkey\"",
+        "sql": "ALTER TABLE \"public\".\"events\"\nADD CONSTRAINT \"events_box_fkey\"\nFOREIGN KEY (\"box\")\nREFERENCES \"public\".\"mailboxes\" (\"id\")"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify FK \"events_box_fkey\" exists with the planned columns, referenced table and actions",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3) AND \"c\".\"contype\" = $4 AND (SELECT coalesce(jsonb_agg(key_attribute.attname ORDER BY key_column.position), '[]'::jsonb) FROM unnest(\"c\".\"conkey\"::int2[]) WITH ORDINALITY AS key_column(attnum, position) JOIN pg_attribute key_attribute ON key_attribute.attrelid = \"c\".\"conrelid\" AND key_attribute.attnum = key_column.attnum) = ($5)::jsonb AND \"c\".\"confrelid\" = to_regclass($6) AND (SELECT coalesce(jsonb_agg(key_attribute.attname ORDER BY key_column.position), '[]'::jsonb) FROM unnest(\"c\".\"confkey\"::int2[]) WITH ORDINALITY AS key_column(attnum, position) JOIN pg_attribute key_attribute ON key_attribute.attrelid = \"c\".\"confrelid\" AND key_attribute.attnum = key_column.attnum) = ($7)::jsonb AND \"c\".\"confdeltype\" = $8 AND \"c\".\"confupdtype\" = $9)) AS \"result\"",
+        "params": [
+          "events_box_fkey",
+          "public",
+          "\"public\".\"events\"",
+          "f",
+          "[\"box\"]",
+          "\"public\".\"mailboxes\"",
+          "[\"id\"]",
+          "a",
+          "a"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "foreignKey.events.events_uid_fkey",
+    "label": "Add foreign key \"events_uid_fkey\" on \"events\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "foreignKey",
+        "name": "events_uid_fkey",
+        "table": "events"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure FK \"events_uid_fkey\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "events_uid_fkey",
+          "public",
+          "\"public\".\"events\""
+        ],
+        "expectation": {
+          "expects": "absent",
+          "object": "FK \"events_uid_fkey\" on \"events\""
+        }
+      }
+    ],
+    "execute": [
+      {
+        "description": "add FK \"events_uid_fkey\"",
+        "sql": "ALTER TABLE \"public\".\"events\"\nADD CONSTRAINT \"events_uid_fkey\"\nFOREIGN KEY (\"uid\")\nREFERENCES \"public\".\"users\" (\"id\")"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify FK \"events_uid_fkey\" exists with the planned columns, referenced table and actions",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3) AND \"c\".\"contype\" = $4 AND (SELECT coalesce(jsonb_agg(key_attribute.attname ORDER BY key_column.position), '[]'::jsonb) FROM unnest(\"c\".\"conkey\"::int2[]) WITH ORDINALITY AS key_column(attnum, position) JOIN pg_attribute key_attribute ON key_attribute.attrelid = \"c\".\"conrelid\" AND key_attribute.attnum = key_column.attnum) = ($5)::jsonb AND \"c\".\"confrelid\" = to_regclass($6) AND (SELECT coalesce(jsonb_agg(key_attribute.attname ORDER BY key_column.position), '[]'::jsonb) FROM unnest(\"c\".\"confkey\"::int2[]) WITH ORDINALITY AS key_column(attnum, position) JOIN pg_attribute key_attribute ON key_attribute.attrelid = \"c\".\"confrelid\" AND key_attribute.attnum = key_column.attnum) = ($7)::jsonb AND \"c\".\"confdeltype\" = $8 AND \"c\".\"confupdtype\" = $9)) AS \"result\"",
+        "params": [
+          "events_uid_fkey",
+          "public",
+          "\"public\".\"events\"",
+          "f",
+          "[\"uid\"]",
+          "\"public\".\"users\"",
+          "[\"id\"]",
+          "a",
+          "a"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "foreignKey.grants.grants_box_fkey",
+    "label": "Add foreign key \"grants_box_fkey\" on \"grants\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "foreignKey",
+        "name": "grants_box_fkey",
+        "table": "grants"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure FK \"grants_box_fkey\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "grants_box_fkey",
+          "public",
+          "\"public\".\"grants\""
+        ],
+        "expectation": {
+          "expects": "absent",
+          "object": "FK \"grants_box_fkey\" on \"grants\""
+        }
+      }
+    ],
+    "execute": [
+      {
+        "description": "add FK \"grants_box_fkey\"",
+        "sql": "ALTER TABLE \"public\".\"grants\"\nADD CONSTRAINT \"grants_box_fkey\"\nFOREIGN KEY (\"box\")\nREFERENCES \"public\".\"mailboxes\" (\"id\")\nON DELETE CASCADE"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify FK \"grants_box_fkey\" exists with the planned columns, referenced table and actions",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3) AND \"c\".\"contype\" = $4 AND (SELECT coalesce(jsonb_agg(key_attribute.attname ORDER BY key_column.position), '[]'::jsonb) FROM unnest(\"c\".\"conkey\"::int2[]) WITH ORDINALITY AS key_column(attnum, position) JOIN pg_attribute key_attribute ON key_attribute.attrelid = \"c\".\"conrelid\" AND key_attribute.attnum = key_column.attnum) = ($5)::jsonb AND \"c\".\"confrelid\" = to_regclass($6) AND (SELECT coalesce(jsonb_agg(key_attribute.attname ORDER BY key_column.position), '[]'::jsonb) FROM unnest(\"c\".\"confkey\"::int2[]) WITH ORDINALITY AS key_column(attnum, position) JOIN pg_attribute key_attribute ON key_attribute.attrelid = \"c\".\"confrelid\" AND key_attribute.attnum = key_column.attnum) = ($7)::jsonb AND \"c\".\"confdeltype\" = $8 AND \"c\".\"confupdtype\" = $9)) AS \"result\"",
+        "params": [
+          "grants_box_fkey",
+          "public",
+          "\"public\".\"grants\"",
+          "f",
+          "[\"box\"]",
+          "\"public\".\"mailboxes\"",
+          "[\"id\"]",
+          "c",
+          "a"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "foreignKey.grants.grants_uid_fkey",
+    "label": "Add foreign key \"grants_uid_fkey\" on \"grants\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "foreignKey",
+        "name": "grants_uid_fkey",
+        "table": "grants"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure FK \"grants_uid_fkey\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "grants_uid_fkey",
+          "public",
+          "\"public\".\"grants\""
+        ],
+        "expectation": {
+          "expects": "absent",
+          "object": "FK \"grants_uid_fkey\" on \"grants\""
+        }
+      }
+    ],
+    "execute": [
+      {
+        "description": "add FK \"grants_uid_fkey\"",
+        "sql": "ALTER TABLE \"public\".\"grants\"\nADD CONSTRAINT \"grants_uid_fkey\"\nFOREIGN KEY (\"uid\")\nREFERENCES \"public\".\"users\" (\"id\")\nON DELETE CASCADE"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify FK \"grants_uid_fkey\" exists with the planned columns, referenced table and actions",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3) AND \"c\".\"contype\" = $4 AND (SELECT coalesce(jsonb_agg(key_attribute.attname ORDER BY key_column.position), '[]'::jsonb) FROM unnest(\"c\".\"conkey\"::int2[]) WITH ORDINALITY AS key_column(attnum, position) JOIN pg_attribute key_attribute ON key_attribute.attrelid = \"c\".\"conrelid\" AND key_attribute.attnum = key_column.attnum) = ($5)::jsonb AND \"c\".\"confrelid\" = to_regclass($6) AND (SELECT coalesce(jsonb_agg(key_attribute.attname ORDER BY key_column.position), '[]'::jsonb) FROM unnest(\"c\".\"confkey\"::int2[]) WITH ORDINALITY AS key_column(attnum, position) JOIN pg_attribute key_attribute ON key_attribute.attrelid = \"c\".\"confrelid\" AND key_attribute.attnum = key_column.attnum) = ($7)::jsonb AND \"c\".\"confdeltype\" = $8 AND \"c\".\"confupdtype\" = $9)) AS \"result\"",
+        "params": [
+          "grants_uid_fkey",
+          "public",
+          "\"public\".\"grants\"",
+          "f",
+          "[\"uid\"]",
+          "\"public\".\"users\"",
+          "[\"id\"]",
+          "c",
+          "a"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "foreignKey.mailboxes.mailboxes_org_fkey",
+    "label": "Add foreign key \"mailboxes_org_fkey\" on \"mailboxes\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "foreignKey",
+        "name": "mailboxes_org_fkey",
+        "table": "mailboxes"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure FK \"mailboxes_org_fkey\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "mailboxes_org_fkey",
+          "public",
+          "\"public\".\"mailboxes\""
+        ],
+        "expectation": {
+          "expects": "absent",
+          "object": "FK \"mailboxes_org_fkey\" on \"mailboxes\""
+        }
+      }
+    ],
+    "execute": [
+      {
+        "description": "add FK \"mailboxes_org_fkey\"",
+        "sql": "ALTER TABLE \"public\".\"mailboxes\"\nADD CONSTRAINT \"mailboxes_org_fkey\"\nFOREIGN KEY (\"org\")\nREFERENCES \"public\".\"organizations\" (\"id\")"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify FK \"mailboxes_org_fkey\" exists with the planned columns, referenced table and actions",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3) AND \"c\".\"contype\" = $4 AND (SELECT coalesce(jsonb_agg(key_attribute.attname ORDER BY key_column.position), '[]'::jsonb) FROM unnest(\"c\".\"conkey\"::int2[]) WITH ORDINALITY AS key_column(attnum, position) JOIN pg_attribute key_attribute ON key_attribute.attrelid = \"c\".\"conrelid\" AND key_attribute.attnum = key_column.attnum) = ($5)::jsonb AND \"c\".\"confrelid\" = to_regclass($6) AND (SELECT coalesce(jsonb_agg(key_attribute.attname ORDER BY key_column.position), '[]'::jsonb) FROM unnest(\"c\".\"confkey\"::int2[]) WITH ORDINALITY AS key_column(attnum, position) JOIN pg_attribute key_attribute ON key_attribute.attrelid = \"c\".\"confrelid\" AND key_attribute.attnum = key_column.attnum) = ($7)::jsonb AND \"c\".\"confdeltype\" = $8 AND \"c\".\"confupdtype\" = $9)) AS \"result\"",
+        "params": [
+          "mailboxes_org_fkey",
+          "public",
+          "\"public\".\"mailboxes\"",
+          "f",
+          "[\"org\"]",
+          "\"public\".\"organizations\"",
+          "[\"id\"]",
+          "a",
+          "a"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "foreignKey.native_attachments.native_attachments_message_fkey",
+    "label": "Add foreign key \"native_attachments_message_fkey\" on \"native_attachments\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "foreignKey",
+        "name": "native_attachments_message_fkey",
+        "table": "native_attachments"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure FK \"native_attachments_message_fkey\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "native_attachments_message_fkey",
+          "public",
+          "\"public\".\"native_attachments\""
+        ],
+        "expectation": {
+          "expects": "absent",
+          "object": "FK \"native_attachments_message_fkey\" on \"native_attachments\""
+        }
+      }
+    ],
+    "execute": [
+      {
+        "description": "add FK \"native_attachments_message_fkey\"",
+        "sql": "ALTER TABLE \"public\".\"native_attachments\"\nADD CONSTRAINT \"native_attachments_message_fkey\"\nFOREIGN KEY (\"message\")\nREFERENCES \"public\".\"native_messages\" (\"id\")\nON DELETE CASCADE"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify FK \"native_attachments_message_fkey\" exists with the planned columns, referenced table and actions",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3) AND \"c\".\"contype\" = $4 AND (SELECT coalesce(jsonb_agg(key_attribute.attname ORDER BY key_column.position), '[]'::jsonb) FROM unnest(\"c\".\"conkey\"::int2[]) WITH ORDINALITY AS key_column(attnum, position) JOIN pg_attribute key_attribute ON key_attribute.attrelid = \"c\".\"conrelid\" AND key_attribute.attnum = key_column.attnum) = ($5)::jsonb AND \"c\".\"confrelid\" = to_regclass($6) AND (SELECT coalesce(jsonb_agg(key_attribute.attname ORDER BY key_column.position), '[]'::jsonb) FROM unnest(\"c\".\"confkey\"::int2[]) WITH ORDINALITY AS key_column(attnum, position) JOIN pg_attribute key_attribute ON key_attribute.attrelid = \"c\".\"confrelid\" AND key_attribute.attnum = key_column.attnum) = ($7)::jsonb AND \"c\".\"confdeltype\" = $8 AND \"c\".\"confupdtype\" = $9)) AS \"result\"",
+        "params": [
+          "native_attachments_message_fkey",
+          "public",
+          "\"public\".\"native_attachments\"",
+          "f",
+          "[\"message\"]",
+          "\"public\".\"native_messages\"",
+          "[\"id\"]",
+          "c",
+          "a"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "foreignKey.native_messages.native_messages_box_fkey",
+    "label": "Add foreign key \"native_messages_box_fkey\" on \"native_messages\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "foreignKey",
+        "name": "native_messages_box_fkey",
+        "table": "native_messages"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure FK \"native_messages_box_fkey\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "native_messages_box_fkey",
+          "public",
+          "\"public\".\"native_messages\""
+        ],
+        "expectation": {
+          "expects": "absent",
+          "object": "FK \"native_messages_box_fkey\" on \"native_messages\""
+        }
+      }
+    ],
+    "execute": [
+      {
+        "description": "add FK \"native_messages_box_fkey\"",
+        "sql": "ALTER TABLE \"public\".\"native_messages\"\nADD CONSTRAINT \"native_messages_box_fkey\"\nFOREIGN KEY (\"box\")\nREFERENCES \"public\".\"mailboxes\" (\"id\")\nON DELETE CASCADE"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify FK \"native_messages_box_fkey\" exists with the planned columns, referenced table and actions",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3) AND \"c\".\"contype\" = $4 AND (SELECT coalesce(jsonb_agg(key_attribute.attname ORDER BY key_column.position), '[]'::jsonb) FROM unnest(\"c\".\"conkey\"::int2[]) WITH ORDINALITY AS key_column(attnum, position) JOIN pg_attribute key_attribute ON key_attribute.attrelid = \"c\".\"conrelid\" AND key_attribute.attnum = key_column.attnum) = ($5)::jsonb AND \"c\".\"confrelid\" = to_regclass($6) AND (SELECT coalesce(jsonb_agg(key_attribute.attname ORDER BY key_column.position), '[]'::jsonb) FROM unnest(\"c\".\"confkey\"::int2[]) WITH ORDINALITY AS key_column(attnum, position) JOIN pg_attribute key_attribute ON key_attribute.attrelid = \"c\".\"confrelid\" AND key_attribute.attnum = key_column.attnum) = ($7)::jsonb AND \"c\".\"confdeltype\" = $8 AND \"c\".\"confupdtype\" = $9)) AS \"result\"",
+        "params": [
+          "native_messages_box_fkey",
+          "public",
+          "\"public\".\"native_messages\"",
+          "f",
+          "[\"box\"]",
+          "\"public\".\"mailboxes\"",
+          "[\"id\"]",
+          "c",
+          "a"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "foreignKey.native_send_attempts.native_send_attempts_box_fkey",
+    "label": "Add foreign key \"native_send_attempts_box_fkey\" on \"native_send_attempts\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "foreignKey",
+        "name": "native_send_attempts_box_fkey",
+        "table": "native_send_attempts"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure FK \"native_send_attempts_box_fkey\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "native_send_attempts_box_fkey",
+          "public",
+          "\"public\".\"native_send_attempts\""
+        ],
+        "expectation": {
+          "expects": "absent",
+          "object": "FK \"native_send_attempts_box_fkey\" on \"native_send_attempts\""
+        }
+      }
+    ],
+    "execute": [
+      {
+        "description": "add FK \"native_send_attempts_box_fkey\"",
+        "sql": "ALTER TABLE \"public\".\"native_send_attempts\"\nADD CONSTRAINT \"native_send_attempts_box_fkey\"\nFOREIGN KEY (\"box\")\nREFERENCES \"public\".\"mailboxes\" (\"id\")\nON DELETE CASCADE"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify FK \"native_send_attempts_box_fkey\" exists with the planned columns, referenced table and actions",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3) AND \"c\".\"contype\" = $4 AND (SELECT coalesce(jsonb_agg(key_attribute.attname ORDER BY key_column.position), '[]'::jsonb) FROM unnest(\"c\".\"conkey\"::int2[]) WITH ORDINALITY AS key_column(attnum, position) JOIN pg_attribute key_attribute ON key_attribute.attrelid = \"c\".\"conrelid\" AND key_attribute.attnum = key_column.attnum) = ($5)::jsonb AND \"c\".\"confrelid\" = to_regclass($6) AND (SELECT coalesce(jsonb_agg(key_attribute.attname ORDER BY key_column.position), '[]'::jsonb) FROM unnest(\"c\".\"confkey\"::int2[]) WITH ORDINALITY AS key_column(attnum, position) JOIN pg_attribute key_attribute ON key_attribute.attrelid = \"c\".\"confrelid\" AND key_attribute.attnum = key_column.attnum) = ($7)::jsonb AND \"c\".\"confdeltype\" = $8 AND \"c\".\"confupdtype\" = $9)) AS \"result\"",
+        "params": [
+          "native_send_attempts_box_fkey",
+          "public",
+          "\"public\".\"native_send_attempts\"",
+          "f",
+          "[\"box\"]",
+          "\"public\".\"mailboxes\"",
+          "[\"id\"]",
+          "c",
+          "a"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "foreignKey.resets.resets_uid_fkey",
+    "label": "Add foreign key \"resets_uid_fkey\" on \"resets\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "foreignKey",
+        "name": "resets_uid_fkey",
+        "table": "resets"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure FK \"resets_uid_fkey\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "resets_uid_fkey",
+          "public",
+          "\"public\".\"resets\""
+        ],
+        "expectation": {
+          "expects": "absent",
+          "object": "FK \"resets_uid_fkey\" on \"resets\""
+        }
+      }
+    ],
+    "execute": [
+      {
+        "description": "add FK \"resets_uid_fkey\"",
+        "sql": "ALTER TABLE \"public\".\"resets\"\nADD CONSTRAINT \"resets_uid_fkey\"\nFOREIGN KEY (\"uid\")\nREFERENCES \"public\".\"users\" (\"id\")\nON DELETE CASCADE"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify FK \"resets_uid_fkey\" exists with the planned columns, referenced table and actions",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3) AND \"c\".\"contype\" = $4 AND (SELECT coalesce(jsonb_agg(key_attribute.attname ORDER BY key_column.position), '[]'::jsonb) FROM unnest(\"c\".\"conkey\"::int2[]) WITH ORDINALITY AS key_column(attnum, position) JOIN pg_attribute key_attribute ON key_attribute.attrelid = \"c\".\"conrelid\" AND key_attribute.attnum = key_column.attnum) = ($5)::jsonb AND \"c\".\"confrelid\" = to_regclass($6) AND (SELECT coalesce(jsonb_agg(key_attribute.attname ORDER BY key_column.position), '[]'::jsonb) FROM unnest(\"c\".\"confkey\"::int2[]) WITH ORDINALITY AS key_column(attnum, position) JOIN pg_attribute key_attribute ON key_attribute.attrelid = \"c\".\"confrelid\" AND key_attribute.attnum = key_column.attnum) = ($7)::jsonb AND \"c\".\"confdeltype\" = $8 AND \"c\".\"confupdtype\" = $9)) AS \"result\"",
+        "params": [
+          "resets_uid_fkey",
+          "public",
+          "\"public\".\"resets\"",
+          "f",
+          "[\"uid\"]",
+          "\"public\".\"users\"",
+          "[\"id\"]",
+          "c",
+          "a"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "foreignKey.schools.schools_org_fkey",
+    "label": "Add foreign key \"schools_org_fkey\" on \"schools\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "foreignKey",
+        "name": "schools_org_fkey",
+        "table": "schools"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure FK \"schools_org_fkey\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "schools_org_fkey",
+          "public",
+          "\"public\".\"schools\""
+        ],
+        "expectation": {
+          "expects": "absent",
+          "object": "FK \"schools_org_fkey\" on \"schools\""
+        }
+      }
+    ],
+    "execute": [
+      {
+        "description": "add FK \"schools_org_fkey\"",
+        "sql": "ALTER TABLE \"public\".\"schools\"\nADD CONSTRAINT \"schools_org_fkey\"\nFOREIGN KEY (\"org\")\nREFERENCES \"public\".\"organizations\" (\"id\")"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify FK \"schools_org_fkey\" exists with the planned columns, referenced table and actions",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3) AND \"c\".\"contype\" = $4 AND (SELECT coalesce(jsonb_agg(key_attribute.attname ORDER BY key_column.position), '[]'::jsonb) FROM unnest(\"c\".\"conkey\"::int2[]) WITH ORDINALITY AS key_column(attnum, position) JOIN pg_attribute key_attribute ON key_attribute.attrelid = \"c\".\"conrelid\" AND key_attribute.attnum = key_column.attnum) = ($5)::jsonb AND \"c\".\"confrelid\" = to_regclass($6) AND (SELECT coalesce(jsonb_agg(key_attribute.attname ORDER BY key_column.position), '[]'::jsonb) FROM unnest(\"c\".\"confkey\"::int2[]) WITH ORDINALITY AS key_column(attnum, position) JOIN pg_attribute key_attribute ON key_attribute.attrelid = \"c\".\"confrelid\" AND key_attribute.attnum = key_column.attnum) = ($7)::jsonb AND \"c\".\"confdeltype\" = $8 AND \"c\".\"confupdtype\" = $9)) AS \"result\"",
+        "params": [
+          "schools_org_fkey",
+          "public",
+          "\"public\".\"schools\"",
+          "f",
+          "[\"org\"]",
+          "\"public\".\"organizations\"",
+          "[\"id\"]",
+          "a",
+          "a"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "foreignKey.senders.senders_org_fkey",
+    "label": "Add foreign key \"senders_org_fkey\" on \"senders\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "foreignKey",
+        "name": "senders_org_fkey",
+        "table": "senders"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure FK \"senders_org_fkey\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "senders_org_fkey",
+          "public",
+          "\"public\".\"senders\""
+        ],
+        "expectation": {
+          "expects": "absent",
+          "object": "FK \"senders_org_fkey\" on \"senders\""
+        }
+      }
+    ],
+    "execute": [
+      {
+        "description": "add FK \"senders_org_fkey\"",
+        "sql": "ALTER TABLE \"public\".\"senders\"\nADD CONSTRAINT \"senders_org_fkey\"\nFOREIGN KEY (\"org\")\nREFERENCES \"public\".\"organizations\" (\"id\")"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify FK \"senders_org_fkey\" exists with the planned columns, referenced table and actions",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3) AND \"c\".\"contype\" = $4 AND (SELECT coalesce(jsonb_agg(key_attribute.attname ORDER BY key_column.position), '[]'::jsonb) FROM unnest(\"c\".\"conkey\"::int2[]) WITH ORDINALITY AS key_column(attnum, position) JOIN pg_attribute key_attribute ON key_attribute.attrelid = \"c\".\"conrelid\" AND key_attribute.attnum = key_column.attnum) = ($5)::jsonb AND \"c\".\"confrelid\" = to_regclass($6) AND (SELECT coalesce(jsonb_agg(key_attribute.attname ORDER BY key_column.position), '[]'::jsonb) FROM unnest(\"c\".\"confkey\"::int2[]) WITH ORDINALITY AS key_column(attnum, position) JOIN pg_attribute key_attribute ON key_attribute.attrelid = \"c\".\"confrelid\" AND key_attribute.attnum = key_column.attnum) = ($7)::jsonb AND \"c\".\"confdeltype\" = $8 AND \"c\".\"confupdtype\" = $9)) AS \"result\"",
+        "params": [
+          "senders_org_fkey",
+          "public",
+          "\"public\".\"senders\"",
+          "f",
+          "[\"org\"]",
+          "\"public\".\"organizations\"",
+          "[\"id\"]",
+          "a",
+          "a"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "foreignKey.sessions.sessions_uid_fkey",
+    "label": "Add foreign key \"sessions_uid_fkey\" on \"sessions\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "foreignKey",
+        "name": "sessions_uid_fkey",
+        "table": "sessions"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure FK \"sessions_uid_fkey\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "sessions_uid_fkey",
+          "public",
+          "\"public\".\"sessions\""
+        ],
+        "expectation": {
+          "expects": "absent",
+          "object": "FK \"sessions_uid_fkey\" on \"sessions\""
+        }
+      }
+    ],
+    "execute": [
+      {
+        "description": "add FK \"sessions_uid_fkey\"",
+        "sql": "ALTER TABLE \"public\".\"sessions\"\nADD CONSTRAINT \"sessions_uid_fkey\"\nFOREIGN KEY (\"uid\")\nREFERENCES \"public\".\"users\" (\"id\")\nON DELETE CASCADE"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify FK \"sessions_uid_fkey\" exists with the planned columns, referenced table and actions",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3) AND \"c\".\"contype\" = $4 AND (SELECT coalesce(jsonb_agg(key_attribute.attname ORDER BY key_column.position), '[]'::jsonb) FROM unnest(\"c\".\"conkey\"::int2[]) WITH ORDINALITY AS key_column(attnum, position) JOIN pg_attribute key_attribute ON key_attribute.attrelid = \"c\".\"conrelid\" AND key_attribute.attnum = key_column.attnum) = ($5)::jsonb AND \"c\".\"confrelid\" = to_regclass($6) AND (SELECT coalesce(jsonb_agg(key_attribute.attname ORDER BY key_column.position), '[]'::jsonb) FROM unnest(\"c\".\"confkey\"::int2[]) WITH ORDINALITY AS key_column(attnum, position) JOIN pg_attribute key_attribute ON key_attribute.attrelid = \"c\".\"confrelid\" AND key_attribute.attnum = key_column.attnum) = ($7)::jsonb AND \"c\".\"confdeltype\" = $8 AND \"c\".\"confupdtype\" = $9)) AS \"result\"",
+        "params": [
+          "sessions_uid_fkey",
+          "public",
+          "\"public\".\"sessions\"",
+          "f",
+          "[\"uid\"]",
+          "\"public\".\"users\"",
+          "[\"id\"]",
+          "c",
+          "a"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "foreignKey.subscriptions.subscriptions_sender_fkey",
+    "label": "Add foreign key \"subscriptions_sender_fkey\" on \"subscriptions\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "foreignKey",
+        "name": "subscriptions_sender_fkey",
+        "table": "subscriptions"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure FK \"subscriptions_sender_fkey\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "subscriptions_sender_fkey",
+          "public",
+          "\"public\".\"subscriptions\""
+        ],
+        "expectation": {
+          "expects": "absent",
+          "object": "FK \"subscriptions_sender_fkey\" on \"subscriptions\""
+        }
+      }
+    ],
+    "execute": [
+      {
+        "description": "add FK \"subscriptions_sender_fkey\"",
+        "sql": "ALTER TABLE \"public\".\"subscriptions\"\nADD CONSTRAINT \"subscriptions_sender_fkey\"\nFOREIGN KEY (\"sender\")\nREFERENCES \"public\".\"senders\" (\"id\")"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify FK \"subscriptions_sender_fkey\" exists with the planned columns, referenced table and actions",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3) AND \"c\".\"contype\" = $4 AND (SELECT coalesce(jsonb_agg(key_attribute.attname ORDER BY key_column.position), '[]'::jsonb) FROM unnest(\"c\".\"conkey\"::int2[]) WITH ORDINALITY AS key_column(attnum, position) JOIN pg_attribute key_attribute ON key_attribute.attrelid = \"c\".\"conrelid\" AND key_attribute.attnum = key_column.attnum) = ($5)::jsonb AND \"c\".\"confrelid\" = to_regclass($6) AND (SELECT coalesce(jsonb_agg(key_attribute.attname ORDER BY key_column.position), '[]'::jsonb) FROM unnest(\"c\".\"confkey\"::int2[]) WITH ORDINALITY AS key_column(attnum, position) JOIN pg_attribute key_attribute ON key_attribute.attrelid = \"c\".\"confrelid\" AND key_attribute.attnum = key_column.attnum) = ($7)::jsonb AND \"c\".\"confdeltype\" = $8 AND \"c\".\"confupdtype\" = $9)) AS \"result\"",
+        "params": [
+          "subscriptions_sender_fkey",
+          "public",
+          "\"public\".\"subscriptions\"",
+          "f",
+          "[\"sender\"]",
+          "\"public\".\"senders\"",
+          "[\"id\"]",
+          "a",
+          "a"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "foreignKey.users.users_org_fkey",
+    "label": "Add foreign key \"users_org_fkey\" on \"users\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "foreignKey",
+        "name": "users_org_fkey",
+        "table": "users"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure FK \"users_org_fkey\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "users_org_fkey",
+          "public",
+          "\"public\".\"users\""
+        ],
+        "expectation": {
+          "expects": "absent",
+          "object": "FK \"users_org_fkey\" on \"users\""
+        }
+      }
+    ],
+    "execute": [
+      {
+        "description": "add FK \"users_org_fkey\"",
+        "sql": "ALTER TABLE \"public\".\"users\"\nADD CONSTRAINT \"users_org_fkey\"\nFOREIGN KEY (\"org\")\nREFERENCES \"public\".\"organizations\" (\"id\")"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify FK \"users_org_fkey\" exists with the planned columns, referenced table and actions",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3) AND \"c\".\"contype\" = $4 AND (SELECT coalesce(jsonb_agg(key_attribute.attname ORDER BY key_column.position), '[]'::jsonb) FROM unnest(\"c\".\"conkey\"::int2[]) WITH ORDINALITY AS key_column(attnum, position) JOIN pg_attribute key_attribute ON key_attribute.attrelid = \"c\".\"conrelid\" AND key_attribute.attnum = key_column.attnum) = ($5)::jsonb AND \"c\".\"confrelid\" = to_regclass($6) AND (SELECT coalesce(jsonb_agg(key_attribute.attname ORDER BY key_column.position), '[]'::jsonb) FROM unnest(\"c\".\"confkey\"::int2[]) WITH ORDINALITY AS key_column(attnum, position) JOIN pg_attribute key_attribute ON key_attribute.attrelid = \"c\".\"confrelid\" AND key_attribute.attnum = key_column.attnum) = ($7)::jsonb AND \"c\".\"confdeltype\" = $8 AND \"c\".\"confupdtype\" = $9)) AS \"result\"",
+        "params": [
+          "users_org_fkey",
+          "public",
+          "\"public\".\"users\"",
+          "f",
+          "[\"org\"]",
+          "\"public\".\"organizations\"",
+          "[\"id\"]",
+          "a",
+          "a"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "foreignKey.users.users_org_school_fkey",
+    "label": "Add foreign key \"users_org_school_fkey\" on \"users\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "foreignKey",
+        "name": "users_org_school_fkey",
+        "table": "users"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure FK \"users_org_school_fkey\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "users_org_school_fkey",
+          "public",
+          "\"public\".\"users\""
+        ],
+        "expectation": {
+          "expects": "absent",
+          "object": "FK \"users_org_school_fkey\" on \"users\""
+        }
+      }
+    ],
+    "execute": [
+      {
+        "description": "add FK \"users_org_school_fkey\"",
+        "sql": "ALTER TABLE \"public\".\"users\"\nADD CONSTRAINT \"users_org_school_fkey\"\nFOREIGN KEY (\"org\", \"school\")\nREFERENCES \"public\".\"schools\" (\"org\", \"id\")"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify FK \"users_org_school_fkey\" exists with the planned columns, referenced table and actions",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3) AND \"c\".\"contype\" = $4 AND (SELECT coalesce(jsonb_agg(key_attribute.attname ORDER BY key_column.position), '[]'::jsonb) FROM unnest(\"c\".\"conkey\"::int2[]) WITH ORDINALITY AS key_column(attnum, position) JOIN pg_attribute key_attribute ON key_attribute.attrelid = \"c\".\"conrelid\" AND key_attribute.attnum = key_column.attnum) = ($5)::jsonb AND \"c\".\"confrelid\" = to_regclass($6) AND (SELECT coalesce(jsonb_agg(key_attribute.attname ORDER BY key_column.position), '[]'::jsonb) FROM unnest(\"c\".\"confkey\"::int2[]) WITH ORDINALITY AS key_column(attnum, position) JOIN pg_attribute key_attribute ON key_attribute.attrelid = \"c\".\"confrelid\" AND key_attribute.attnum = key_column.attnum) = ($7)::jsonb AND \"c\".\"confdeltype\" = $8 AND \"c\".\"confupdtype\" = $9)) AS \"result\"",
+        "params": [
+          "users_org_school_fkey",
+          "public",
+          "\"public\".\"users\"",
+          "f",
+          "[\"org\",\"school\"]",
+          "\"public\".\"schools\"",
+          "[\"org\",\"id\"]",
+          "a",
+          "a"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "rowLevelSecurity.public.native_attachments",
+    "label": "Enable row-level security on \"native_attachments\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "rowLevelSecurity",
+        "name": "native_attachments"
+      }
+    },
+    "precheck": [
+      {
+        "description": "check RLS is not already enabled on \"native_attachments\"",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_class\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"relnamespace\" WHERE (\"n\".\"nspname\" = $1 AND \"c\".\"relname\" = $2 AND NOT (\"c\".\"relrowsecurity\"))) AS \"result\"",
+        "params": [
+          "public",
+          "native_attachments"
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "enable row-level security on \"native_attachments\"",
+        "sql": "ALTER TABLE \"public\".\"native_attachments\" ENABLE ROW LEVEL SECURITY"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify row-level security is enabled on \"native_attachments\"",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_class\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"relnamespace\" WHERE (\"n\".\"nspname\" = $1 AND \"c\".\"relname\" = $2 AND \"c\".\"relrowsecurity\")) AS \"result\"",
+        "params": [
+          "public",
+          "native_attachments"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "rowLevelSecurity.public.native_messages",
+    "label": "Enable row-level security on \"native_messages\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "rowLevelSecurity",
+        "name": "native_messages"
+      }
+    },
+    "precheck": [
+      {
+        "description": "check RLS is not already enabled on \"native_messages\"",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_class\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"relnamespace\" WHERE (\"n\".\"nspname\" = $1 AND \"c\".\"relname\" = $2 AND NOT (\"c\".\"relrowsecurity\"))) AS \"result\"",
+        "params": [
+          "public",
+          "native_messages"
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "enable row-level security on \"native_messages\"",
+        "sql": "ALTER TABLE \"public\".\"native_messages\" ENABLE ROW LEVEL SECURITY"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify row-level security is enabled on \"native_messages\"",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_class\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"relnamespace\" WHERE (\"n\".\"nspname\" = $1 AND \"c\".\"relname\" = $2 AND \"c\".\"relrowsecurity\")) AS \"result\"",
+        "params": [
+          "public",
+          "native_messages"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "rowLevelSecurity.public.native_send_attempts",
+    "label": "Enable row-level security on \"native_send_attempts\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "rowLevelSecurity",
+        "name": "native_send_attempts"
+      }
+    },
+    "precheck": [
+      {
+        "description": "check RLS is not already enabled on \"native_send_attempts\"",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_class\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"relnamespace\" WHERE (\"n\".\"nspname\" = $1 AND \"c\".\"relname\" = $2 AND NOT (\"c\".\"relrowsecurity\"))) AS \"result\"",
+        "params": [
+          "public",
+          "native_send_attempts"
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "enable row-level security on \"native_send_attempts\"",
+        "sql": "ALTER TABLE \"public\".\"native_send_attempts\" ENABLE ROW LEVEL SECURITY"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify row-level security is enabled on \"native_send_attempts\"",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_class\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"relnamespace\" WHERE (\"n\".\"nspname\" = $1 AND \"c\".\"relname\" = $2 AND \"c\".\"relrowsecurity\")) AS \"result\"",
+        "params": [
+          "public",
+          "native_send_attempts"
+        ]
+      }
+    ]
+  }
+]

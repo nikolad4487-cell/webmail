@@ -1,8 +1,18 @@
 import { Pool, type PoolClient } from 'pg';
 import { createHash, randomBytes, scrypt, timingSafeEqual } from 'node:crypto';
 import { promisify } from 'node:util';
+import service from './service.mjs';
 
-export const db = new Pool({ connectionString: process.env.DATABASE_URL, connectionTimeoutMillis: 5000 });
+// On Prisma Compute and under `prisma dev` the database arrives through the
+// service's declared dependency: service.load() reads the raw Postgres
+// binding's URL (stashed as COMPOSER_DB_URL). Where the Composer runtime
+// keeps no rows (the Vercel function, `npm run dev`, and tests that set
+// DATABASE_URL), keep this module's original DATABASE_URL source.
+export const databaseUrl = (() => {
+  try { return service.load().db.url; }
+  catch { return process.env.DATABASE_URL; }
+})();
+export const db = new Pool({ connectionString: databaseUrl, connectionTimeoutMillis: 5000 });
 export type LoginDatabaseIssue='DB_CONFIG'|'DB_SCHEMA'|'DB_PERMISSION'|'DB_CONNECTION';
 
 export function loginDatabaseIssue(error:unknown):LoginDatabaseIssue|undefined {
