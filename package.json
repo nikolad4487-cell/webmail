@@ -20,7 +20,8 @@
     "test:migration": "node --import tsx --test tests/migration/*.mjs",
     "test:passwords": "node --import tsx --test tests/passwords/*.mjs",
     "test:provisioning": "node --import tsx --test tests/provisioning/*.mjs",
-    "test:formapoint": "node --import tsx --test tests/formapoint/*.mjs"
+    "test:formapoint": "node --import tsx --test tests/formapoint/flow.mjs",
+    "test:welcome": "node --import tsx --test tests/formapoint/welcome.mjs"
   },
   "repository": {
     "type": "git",

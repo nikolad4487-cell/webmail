@@ -45,7 +45,7 @@ test('Concurrent verified registrations create exactly one stable account and pr
   assert.equal(results.flatMap(r=>r.results).filter(r=>r.status==='created').length,1);
   const rows=(await db.query('select u.*,m.id box,m.storage_kind from users u join mailboxes m on m.address=u.email where u.source_user_id=$1',[alice.id])).rows;
   assert.equal(rows.length,1);const u=rows[0];address=u.email;uid=u.id;box=u.box;
-  assert.match(address,/^alice\.[a-f0-9]{16}@formapoint\.online$/);assert.equal(u.role,'user');assert.equal(u.password,null);assert.equal(u.storage_kind,'native');
+  assert.equal(address,'alice@formapoint.online');assert.equal(u.role,'user');assert.equal(u.password,null);assert.equal(u.storage_kind,'native');
   assert.equal(u.source_email,alice.email);
   assert.deepEqual((await db.query('select uid,can_send,can_calendar from grants where box=$1',[box])).rows,[{uid,can_send:true,can_calendar:true}]);
   assert.equal((await db.query('select uid from directory_identities where project=$1 and subject=$2',['forma-test',alice.id])).rows[0].uid,uid);
@@ -131,4 +131,43 @@ test('Original-address repair refuses collisions and preserves account, password
   assert.equal((await db.query('select content from native_attachments where message=$1',[saved.id])).rows[0].content.toString(),'preserved attachment');
   assert.equal((await db.query('select count(*)::int n from sessions where uid=$1',[u.id])).rows[0].n,0);
   assert.equal((await db.query("select count(*)::int n from audits where uid=$1 and action='formapoint.address.correct'",[u.id])).rows[0].n,1);
+});
+
+test('Full names use Croatian transliteration and numeric collision suffixes without extra punctuation',async()=>{
+  const people=Array.from({length:4},(_,i)=>({...person('marko'+i+'@example.test'),name:'Marko Marić'}));
+  const results=await Promise.all(people.map(p=>sync([p])));
+  const addresses=results.map(r=>r.results[0].address).sort();
+  assert.deepEqual(addresses,['marko.maric2@formapoint.online','marko.maric3@formapoint.online','marko.maric4@formapoint.online','marko.maric@formapoint.online'].sort());
+  const {personAddress}=await import('../../server/directory-source.ts');
+  assert.equal(personAddress('formapoint','formapoint.online','other@gmail.com',randomUUID(),'Đuro Čačić'),'duro.cacic@formapoint.online');
+  assert.equal(personAddress('formapoint','formapoint.online','nikoladuric280@gmail.com',randomUUID(),'nikoladuric280@gmail.com'),'nikoladuric280@formapoint.online');
+  for(const p of people)assert.equal((await sync([p])).results[0].status,'existing');
+});
+
+test('Existing generated personal addresses shorten once while preserving IDs, password and stored mail',async()=>{
+  const {shortenExistingFormaPointAddresses}=await import('../../server/formapoint-addresses.ts');
+  const {transaction}=await import('../../server/db.ts');
+  const p={...person('preserve@gmail.com'),name:'Petar Horvat'},previous='preserve.'+createHash('sha256').update(p.id).digest('hex').slice(0,16)+'@formapoint.online';
+  const u=(await db.query(`insert into users(org,email,name,password,auth_kind,source_project,source_user_id,source_email)
+    values($1,$2,$3,'keep-password','formapoint','forma-test',$4,$5) returning *`,[org,previous,p.name,p.id,p.email])).rows[0];
+  const b=(await db.query("insert into mailboxes(org,address,label,storage_kind) values($1,$2,'Keep','native') returning *",[org,previous])).rows[0];
+  await db.query('insert into grants values($1,$2,true,true)',[u.id,b.id]);
+  await db.query("insert into native_messages(box,path,raw,subject,text_body,sent_at,bytes) values($1,'INBOX',decode('01','hex'),'Keep','Keep',now(),1)",[b.id]);
+  assert.equal(await transaction(shortenExistingFormaPointAddresses),1);
+  assert.equal(await transaction(shortenExistingFormaPointAddresses),0);
+  assert.deepEqual((await db.query('select * from users where id=$1',[u.id])).rows[0],{...u,email:'petar.horvat@formapoint.online'});
+  assert.deepEqual((await db.query('select * from mailboxes where id=$1',[b.id])).rows[0],{...b,address:'petar.horvat@formapoint.online'});
+  assert.equal((await db.query('select count(*)::int n from native_messages where box=$1',[b.id])).rows[0].n,1);
+});
+
+test('Requested existing Gmail account receives nikola.duric while preserving its original login identity',async()=>{
+  const {shortenExistingFormaPointAddresses}=await import('../../server/formapoint-addresses.ts'),{transaction}=await import('../../server/db.ts');
+  const id=randomUUID(),source='nikoladuric280@gmail.com',previous='nikoladuric280.'+createHash('sha256').update(id).digest('hex').slice(0,16)+'@formapoint.online';
+  const u=(await db.query(`insert into users(org,email,name,password,auth_kind,source_project,source_user_id,source_email)
+    values($1,$2,$3,null,'formapoint','heseilggogbtmqeuwlku',$4,$3) returning *`,[org,previous,source,id])).rows[0];
+  const b=(await db.query("insert into mailboxes(org,address,label,storage_kind) values($1,$2,'Personal','native') returning id",[org,previous])).rows[0];
+  await db.query('insert into grants values($1,$2,true,true)',[u.id,b.id]);
+  const project=process.env.FORMAPOINT_SUPABASE_PROJECT_ID;process.env.FORMAPOINT_SUPABASE_PROJECT_ID='heseilggogbtmqeuwlku';
+  try{assert.equal(await transaction(shortenExistingFormaPointAddresses),1);}finally{process.env.FORMAPOINT_SUPABASE_PROJECT_ID=project;}
+  assert.deepEqual((await db.query('select * from users where id=$1',[u.id])).rows[0],{...u,email:'nikola.duric@formapoint.online'});
 });

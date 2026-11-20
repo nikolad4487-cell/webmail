@@ -30,6 +30,8 @@ test('Prisma-style GRANT/REVOKE restrictions preserve migration and server-only 
     await c.query(passwords);await c.query(passwords);
     const provisioning=await readFile(new URL('../../migrations/003-mailbox-provisioning.sql',import.meta.url),'utf8');
     await c.query(provisioning);await c.query(provisioning);
+    const welcome=await readFile(new URL('../../migrations/005-formapoint-welcome.sql',import.meta.url),'utf8');
+    await c.query(welcome);await c.query(welcome);
     assert.equal((await c.query("select exists(select 1 from information_schema.columns where table_name='users' and column_name='password_scheme') as ok")).rows[0].ok,true);
     await assert.rejects(c.query('revoke all on native_messages from public'),{code:'42501'});
     await c.query(`insert into organizations(id,name) values(1,'Test');
@@ -38,9 +40,10 @@ test('Prisma-style GRANT/REVOKE restrictions preserve migration and server-only 
       values(1,'INBOX',decode('01','hex'),'Test','Test',now(),1)`);
     assert.equal((await c.query(`select count(*)::int as n from pg_class c,
       lateral aclexplode(coalesce(c.relacl,acldefault('r',c.relowner))) a
-      where c.oid in ('native_messages'::regclass,'native_attachments'::regclass,'native_send_attempts'::regclass) and a.grantee=0`)).rows[0].n,0);
+      where c.oid in ('native_messages'::regclass,'native_attachments'::regclass,'native_send_attempts'::regclass,'formapoint_welcomes'::regclass) and a.grantee=0`)).rows[0].n,0);
     await c.query('reset role');await c.query('set role prisma_application');
     assert.equal((await c.query('select count(*)::int as n from native_messages')).rows[0].n,1);
+    assert.equal((await c.query('select count(*)::int n from formapoint_welcomes')).rows[0].n,0);
     await c.query('reset role');
     await c.query('alter event trigger prisma_acl_restriction disable');
     await c.query('grant select on native_messages to public');

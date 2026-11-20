@@ -6,6 +6,8 @@ import {HttpError} from './mail.js';
 import {email} from './http.js';
 import {personAddress} from './directory-source.js';
 import {requireNativeSetup} from './mailbox-provisioning.js';
+import {allocateFormaPointAddress} from './formapoint-addresses.js';
+import {queueFormaPointWelcome,deliverFormaPointWelcomes} from './formapoint-welcome.js';
 
 const person=z.object({id:z.uuid(),email,name:z.string().trim().min(1).max(240),confirmed:z.literal(true),anonymous:z.literal(false)}).strict();
 const input=z.object({project:z.string().min(1).max(200),setup:z.boolean().default(false),users:z.array(person).max(10)}).strict();
@@ -40,7 +42,8 @@ async function syncPerson(p:z.infer<typeof person>){
       where (u.auth_kind='formapoint' and u.source_project=$1 and u.source_user_id=$2) or (d.project=$1 and d.subject=$2)`,[cfg.project,p.id]);
     if(bound.length>1)throw new HttpError(409,'Izvorni račun ima više povezanih identiteta.');
     let u=bound[0];
-    const address=u?.email??personAddress('formapoint',cfg.domain,p.email,p.id)!;
+    const address=u?.email??(p.email.endsWith('@'+cfg.domain)?personAddress('formapoint',cfg.domain,p.email,p.id,p.name)!:
+      await allocateFormaPointAddress(c,cfg.domain,p.email,p.id,p.name));
     if(!address.endsWith('@'+cfg.domain))throw new HttpError(409,'Postojeća adresa pripada drugoj domeni.');
     for(const value of [...new Set([address,p.email])].sort())await c.query('select pg_advisory_xact_lock(hashtextextended($1,0))',[value]);
     const {rows:matches}=await c.query('select * from users where email=any($1::text[]) or source_email=any($1::text[]) for update',[[address,p.email]]);
@@ -65,11 +68,13 @@ async function syncPerson(p:z.infer<typeof person>){
       if(grants.rows.some(x=>x.uid!==u.id))throw new HttpError(409,'Sandučić je dodijeljen drugom korisniku.');
       if(box.storage_kind!=='native')return {sourceId:p.id,address,status:'needs_activation'};
       await c.query('insert into grants(uid,box,can_send,can_calendar) values($1,$2,true,true) on conflict(uid,box) do nothing',[u.id,box.id]);
+      await queueFormaPointWelcome(c,u.id,box.id);
       return {sourceId:p.id,address,status:'existing'};
     }
     const {rows:[created]}=await c.query("insert into mailboxes(org,address,label,storage_kind) values($1,$2,$3,'native') returning id",[domain.org,address,p.name]);
     await c.query('insert into grants(uid,box,can_send,can_calendar) values($1,$2,true,true)',[u.id,created.id]);
     await c.query("insert into audits(action,target) values('formapoint.mailbox.create',$1)",[String(created.id)]);
+    await queueFormaPointWelcome(c,u.id,created.id);
     return {sourceId:p.id,address,status:'created'};
   });
 }
@@ -95,6 +100,7 @@ export function setupFormaPointMailboxes(app:Express,allowedHost:(host:string)=>
       try{results.push(await syncPerson(p));}
       catch(error){if(error instanceof HttpError&&error.status===409)results.push({sourceId:p.id,status:'conflict',reason:error.message});else throw error;}
     }
-    res.json({ok:true,results});
+    let welcomes;try{welcomes=await deliverFormaPointWelcomes();}catch{welcomes={pending:true};}
+    res.json({ok:true,results,welcomes});
   });
 }

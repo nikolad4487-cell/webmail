@@ -268,8 +268,12 @@ Anonimni, nepotvrđeni i zabranjeni računi preskaču se. Ovi servisni pozivi ni
 pristupačni običnoj korisničkoj sesiji ili pregledniku.
 
 Potvrđena adresa s vlastite domene ostaje ista, uključujući `admin@formapoint.online`;
-naziv adrese ne dodjeljuje administratorsku ulogu. Zauzete adrese i aliasi se ne preuzimaju. Za vanjski prijavni e-mail
-stvara se stabilna adresa `lokalni-dio.<16 hex znakova identiteta>@formapoint.online`.
+naziv adrese ne dodjeljuje administratorsku ulogu. Zauzete adrese i aliasi se ne preuzimaju. Za osobni prijavni e-mail
+stvara se adresa `ime.prezime@formapoint.online` iz potvrđenog računa. Kvačice se
+uklanjaju (`Marić` → `maric`, `Đurić` → `duric`). Zauzeto ime dobiva nastavke
+`ime.prezime2`, `ime.prezime3`, bez dodatne točke. Kad ime i prezime nisu dostupni,
+koristi se lokalni dio osobne e-mail adrese. Dodjela je transakcijska i provjerava
+korisnike, sandučiće, aliase i servisne adrese.
 Povezani korisnik zadržava adresu i nakon promjene prijavnog e-maila. U početku se
 prijavljuje FormaPoint podacima uz provjeru izvornog UUID-a. Postojeća neovisna
 WebmailHR lozinka ostaje važeća. Neaktivni, tuđi i rezervirani računi se ne preuzimaju;
@@ -556,3 +560,31 @@ potvrđeni izvorni račun i njegov osobni native sandučić. Provjerava kolizije
 vlasništvo, zadržava iste ID-eve računa i sandučića te lozinku, poruke, privitke i
 dodjele. Račun ostaje u ulozi `user`; stare sesije opozivaju se. Ponovna primjena
 ne stvara dodatne zapise. Serverska provjera pri migraciji potvrđuje rezultat.
+
+### Obavijest o FormaPoint sandučiću
+
+Uz serverski `FORMAPOINT_WELCOME_EMAIL=1`, stvaranje novog povezanog osobnog
+sandučića dodaje jednu obavijest u `formapoint_welcomes` (migracija 005). Poruka ide
+na potvrđenu izvornu e-mail adresu preko postojećeg Mailjeta, s nazivom pošiljatelja
+FormaPoint Tim, adresom novog sandučića i retkom **Lozinka: ona koju ste postavili
+za prijavu na FormaPoint**. Lozinka se ne generira, ne čita i ne šalje. Prijava
+i dalje provjerava izvornu FormaPoint lozinku i UUID. Postojeće neovisne WebmailHR
+lozinke ostaju sačuvane; takvim se računima ova uputa ne šalje.
+
+Obavijest se zapisuje u istoj transakciji kao sandučić i preuzima prije mrežnog
+poziva. Istodobne prijave ne šalju dvaput. Uspjeh se označava `sent` tek kad Mailjet
+potvrdi predaju. Kvota i nedostajuće postavke ostavljaju `pending`, a nejasan
+mrežni ishod ostavlja `unknown` za operatersku provjeru, bez automatskog ponavljanja.
+Sljedeći poziv provisioniranja obrađuje do 10 čekajućih obavijesti. Red ne sadrži
+lozinke ni tajne i ima server-only RLS. Odvojena dodjela lozinke ili promjena
+identiteta prije slanja poništava zastarjelu obavijest.
+
+Postojeće adrese s izvornim UUID nastavkom preimenuju se samo ako se potvrdi točan
+izvorni identitet i osobno vlasništvo. ID-evi, poruke, privitci, lozinke i prava
+ostaju isti; prilagođene i već skraćene adrese se ne mijenjaju. Jednokratna
+korisnička uputa za `nikoladuric280@gmail.com` dodjeljuje `nikola.duric@formapoint.online`
+i stavlja obavijest u red. DNS/MX se ovom objavom ne mijenja.
+
+Provjere: `npm run test:formapoint` (imenovanje, kolizije, preimenovanje),
+`npm run test:welcome` (jedna obavijest, točan predložak, izvorna prijava, bez
+promjene lozinke), native/lozinka/migracijske regresijske provjere i produkcijski build.
