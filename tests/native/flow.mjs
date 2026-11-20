@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {createServer,request as httpRequest} from 'node:http';
 import {once} from 'node:events';
 import {readFile} from 'node:fs/promises';
-import {createHash,createHmac} from 'node:crypto';
+import {createHash,createHmac,randomBytes} from 'node:crypto';
 import worker from '../../cloudflare/email-worker.mjs';
 
 if(!process.env.TEST_DATABASE_URL)throw new Error('Set TEST_DATABASE_URL to an isolated disposable PostgreSQL database.');
@@ -33,13 +33,15 @@ before(async()=>{
   await db.query(await readFile(new URL('../../server/schema.sql',import.meta.url),'utf8'));
   const migration=await readFile(new URL('../../migrations/001-native-mail.sql',import.meta.url),'utf8');
   await db.query(migration);await db.query(migration);
+  await db.query(await readFile(new URL('../../migrations/002-mail-passwords.sql',import.meta.url),'utf8'));
+  await db.query(await readFile(new URL('../../migrations/003-mailbox-provisioning.sql',import.meta.url),'utf8'));
   const {hashPassword}=await import('../../server/db.ts');
   const {staffSecret}=await import('../../server/identity.ts');
   const password=await hashPassword(staffSecret('12345678'));
   const org=(await db.query("insert into organizations(name) values('Native pilot') returning id")).rows[0].id;
   await db.query("insert into domains(name,org) values('skolehr.xyz',$1),('formapoint.test',$1)",[org]);
-  const owner=(await db.query("insert into users(org,email,name,password,auth_kind) values($1,'demo@skolehr.xyz','Demo',$2,'staff') returning id",[org,password])).rows[0].id;
-  const other=(await db.query("insert into users(org,email,name,password,auth_kind) values($1,'other@formapoint.test','Other',$2,'staff') returning id",[org,password])).rows[0].id;
+  const owner=(await db.query("insert into users(org,email,name,password,auth_kind,password_scheme) values($1,'demo@skolehr.xyz','Demo',$2,'staff','staff_pin') returning id",[org,password])).rows[0].id;
+  const other=(await db.query("insert into users(org,email,name,password,auth_kind,password_scheme) values($1,'other@formapoint.test','Other',$2,'staff','staff_pin') returning id",[org,password])).rows[0].id;
   box=(await db.query("insert into mailboxes(org,address,label,storage_kind) values($1,'demo@skolehr.xyz','demo@skolehr.xyz','native') returning id",[org])).rows[0].id;
   otherBox=(await db.query("insert into mailboxes(org,address,label) values($1,'other@formapoint.test','Other') returning id",[org])).rows[0].id;
   await db.query('insert into grants(uid,box,can_send) values($1,$2,true),($3,$4,true)',[owner,box,other,otherBox]);
@@ -51,6 +53,7 @@ before(async()=>{
     else res.end(JSON.stringify({Messages:[{Status:'success',To:[{Email:'sender@example.test'}]}]}));
   }).listen(0,'127.0.0.1');await once(jetServer,'listening');
   process.env.MAILJET_TEST_URL='http://127.0.0.1:'+jetServer.address().port+'/v3.1/send';
+  await db.query(await readFile(new URL('../../migrations/006-school-mailboxes.sql',import.meta.url),'utf8'));
   const {default:app}=await import('../../server/app.ts');
   appServer=app.listen(0,'127.0.0.1');await once(appServer,'listening');base='http://127.0.0.1:'+appServer.address().port;
   cookie=(await request('/login',{body:{identifier:'demo@skolehr.xyz',password:'12345678'},session:null})).cookie;
@@ -106,6 +109,10 @@ test('Odgovor preko probnog Mailjeta i kopija u Poslano',async()=>{
   assert.equal(Buffer.from(msg.Attachments[0].Base64Content,'base64').toString(),'Reply attachment');
   assert.equal(sent[0].authorization,'Basic '+Buffer.from('local-key:local-secret').toString('base64'));
   const copies=(await request('/mail/'+box+'?folder=sent')).body;assert.equal(copies.length,1);assert.equal(copies[0].inReplyTo,'<native-pilot@example.test>');
+  const sentLocation=new URLSearchParams({id:copies[0].id,path:copies[0].path});
+  const saved=(await request('/mail/'+box+'/message?'+sentLocation)).body;
+  assert.equal(saved.text.trim(),'Odgovor.');assert.equal(saved.attachments[0].name,'odgovor.txt');
+  assert.equal((await request('/mail/'+box+'/attachment?'+sentLocation+'&index=0')).body,'Reply attachment');
   jetFailure=true;
   await request('/mail/'+box+'/send',{body:{from:'demo@skolehr.xyz',to:['sender@example.test'],subject:'Fail',text:'Fail'},status:502});
   jetFailure=false;assert.equal((await request('/mail/'+box+'?folder=sent')).body.length,1);
@@ -162,4 +169,92 @@ test('Worker odbija poruku nakon iscrpljenih HTTPS pokušaja; Mailjet kvota sprj
   const previous=sent.length;
   await request('/mail/'+box+'/send',{body:{from:'demo@skolehr.xyz',to:['sender@example.test'],subject:'Quota',text:'Quota'},status:429});
   assert.equal(sent.length,previous);delete process.env.MAILJET_DAILY_RECIPIENTS;
+});
+
+let nativeRoot,nativeOrg,viktorBox,viktorUid,viktorCookie;
+async function adminRequest(path,{body,method=body?'POST':'GET',status=200}={}){
+  return new Promise((resolve,reject)=>{
+    const req=httpRequest(base+'/api'+path,{method,headers:{host:'admin.localhost',cookie:nativeRoot,...(body?{'Content-Type':'application/json'}:{})}},res=>{
+      let output='';res.on('data',chunk=>{output+=chunk;});res.on('end',()=>{
+        try{assert.equal(res.statusCode,status,path+' '+output);resolve(JSON.parse(output));}catch(e){reject(e);}
+      });
+    });
+    req.on('error',reject);req.end(body?JSON.stringify(body):undefined);
+  });
+}
+test('Samo root uključuje native sandučić; serverska allowlista i osobni vlasnik su obavezni',async()=>{
+  const {hashPassword,digest}=await import('../../server/db.ts');
+  nativeOrg=(await db.query('select org from mailboxes where id=$1',[box])).rows[0].org;
+  const root=(await db.query("insert into users(org,email,name,password,role) values($1,'root@formapoint.test','Root',$2,'root') returning id",[nativeOrg,await hashPassword('local-root-password')])).rows[0].id;
+  const key=randomBytes(32).toString('hex');nativeRoot='wm_session='+key;
+  await db.query("insert into sessions values($1,$2,now()+interval '1 hour')",[digest(key),root]);
+  viktorUid=(await db.query("insert into users(org,email,name,password,auth_kind) values($1,'viktor.beljan@skolehr.xyz','Viktor',$2,'staff') returning id",[nativeOrg,await hashPassword('87654321')])).rows[0].id;
+  viktorBox=(await db.query("insert into mailboxes(org,address,label) values($1,'viktor.beljan@skolehr.xyz','Viktor') returning id",[nativeOrg])).rows[0].id;
+  const route='/admin/mailboxes/'+viktorBox+'/native';
+  await request(route,{method:'POST',status:403});
+  await db.query("update users set role='admin' where email='other@formapoint.test'");
+  await request(route,{method:'POST',session:otherCookie,status:403});
+  await db.query("update users set role='user' where email='other@formapoint.test'");
+  await adminRequest(route,{method:'POST',status:409}); // Not allowlisted.
+  process.env.NATIVE_ENABLED_ADDRESSES+=',viktor.beljan@skolehr.xyz';
+  await adminRequest(route,{method:'POST',status:409}); // No owner.
+  await db.query('insert into grants(uid,box,can_send) values($1,$2,false)',[viktorUid,viktorBox]);
+  await adminRequest(route,{method:'POST',status:409}); // Cannot send.
+  await db.query('update grants set can_send=true where box=$1',[viktorBox]);
+  await db.query('update users set active=false where id=$1',[viktorUid]);
+  await adminRequest(route,{method:'POST',status:409});
+  await db.query('update users set active=true where id=$1',[viktorUid]);
+  const otherUid=(await db.query("select id from users where email='other@formapoint.test'")).rows[0].id;
+  await db.query('insert into grants(uid,box,can_send) values($1,$2,true)',[otherUid,viktorBox]);
+  await adminRequest(route,{method:'POST',status:409}); // Multiple owners.
+  await db.query('delete from grants where uid=$1 and box=$2',[viktorUid,viktorBox]);
+  await adminRequest(route,{method:'POST',status:409}); // Wrong email, even in same org.
+  await db.query('delete from grants where box=$1',[viktorBox]);
+  await db.query('insert into grants(uid,box,can_send) values($1,$2,true)',[viktorUid,viktorBox]);
+  assert.equal((await db.query('select storage_kind from mailboxes where id=$1',[viktorBox])).rows[0].storage_kind,'imap');
+});
+test('Native aktivacija odbija zajednički, neaktivni i sinkronizirani IMAP sandučić te isključenu domenu',async()=>{
+  const route='/admin/mailboxes/'+viktorBox+'/native';
+  for(const change of ['shared=true','active=false']){
+    await db.query('update mailboxes set '+change+' where id=$1',[viktorBox]);
+    await adminRequest(route,{method:'POST',status:409});
+    await db.query('update mailboxes set shared=false,active=true where id=$1',[viktorBox]);
+  }
+  await db.query("update domains set outbound=false where name='skolehr.xyz'");
+  await adminRequest(route,{method:'POST',status:409});
+  await db.query("update domains set outbound=true where name='skolehr.xyz'");
+  await db.query("insert into directory_identities values('local-test','viktor',$1)",[viktorUid]);
+  await db.query("insert into directory_mailboxes(box,uid,encrypted_password) values($1,$2,'test-only')",[viktorBox,viktorUid]);
+  await adminRequest(route,{method:'POST',status:409});
+  await db.query('delete from directory_identities where uid=$1',[viktorUid]);
+  const secret=process.env.MAILJET_SECRET_KEY;delete process.env.MAILJET_SECRET_KEY;
+  try{await adminRequest(route,{method:'POST',status:503});}finally{process.env.MAILJET_SECRET_KEY=secret;}
+});
+test('Native uključivanje je idempotentno, čuva dodjelu i izolira stvarni drugi osobni sandučić',async()=>{
+  const route='/admin/mailboxes/'+viktorBox+'/native';
+  await adminRequest(route,{method:'POST'});await adminRequest(route,{method:'POST'});
+  const rows=await adminRequest('/admin/mailboxes');assert.equal(rows.find(x=>x.id===viktorBox).storage_kind,'native');
+  assert.equal((await db.query("select count(*)::int n from audits where action='mailbox.native.enable' and target=$1",[String(viktorBox)])).rows[0].n,1);
+  assert.equal((await db.query('select storage_kind from mailboxes where id=$1',[otherBox])).rows[0].storage_kind,'imap');
+  viktorCookie=(await request('/login',{session:null,body:{identifier:'viktor.beljan@skolehr.xyz',password:'87654321'}})).cookie;
+  assert.deepEqual((await request('/me',{session:viktorCookie})).body.boxes.map(x=>x.id),[viktorBox]);
+  const {mime}=await import('../../server/mail.ts');
+  const bytes=await mime({from:'sender@example.test',to:['viktor.beljan@skolehr.xyz'],subject:'Viktor personal',text:'Private mail',attachments:[{filename:'viktor.txt',content:Buffer.from('Viktor only')}]});
+  assert.equal((await deliver(bytes,headers(bytes,'viktor.beljan@skolehr.xyz'))).status,201);
+  const row=(await request('/mail/'+viktorBox,{session:viktorCookie})).body[0];
+  const query=new URLSearchParams({path:row.path,id:row.id});
+  assert.equal((await request('/mail/'+viktorBox+'/attachment?'+query+'&index=0',{session:viktorCookie})).body,'Viktor only');
+  await request('/mail/'+viktorBox+'/message?'+query,{status:403});
+  await request('/mail/'+box,{session:viktorCookie,status:403});
+  await request('/mail/'+viktorBox+'/send',{session:viktorCookie,body:{from:'viktor.beljan@skolehr.xyz',to:['sender@example.test'],subject:'Viktor reply',text:'Reply'}});
+  assert.equal(sent.at(-1).body.Messages[0].From.Email,'viktor.beljan@skolehr.xyz');
+});
+test('Administracija čuva adresu i osobnu dodjelu aktiviranog native sandučića',async()=>{
+  const update={key:viktorBox,org:nativeOrg,address:'viktor.beljan@skolehr.xyz',label:'Viktor',shared:false,active:true,target_quota_gb:15};
+  await adminRequest('/admin/mailboxes',{body:{...update,address:'other@skolehr.xyz'},status:409});
+  await adminRequest('/admin/mailboxes',{body:{...update,shared:true},status:409});
+  await adminRequest('/admin/mailboxes',{body:{...update,storage_kind:'imap'}});
+  assert.equal((await db.query('select storage_kind from mailboxes where id=$1',[viktorBox])).rows[0].storage_kind,'native');
+  const otherUid=(await db.query("select id from users where email='other@formapoint.test'")).rows[0].id;
+  await adminRequest('/admin/access/'+viktorBox,{method:'PUT',body:{kind:'grant',uid:otherUid,remove:false,can_send:true,can_calendar:false},status:409});
 });

@@ -222,7 +222,7 @@ test('Odvojeni projekti, isti korisnički identifikator i provjera nove izvorne 
   }
 });
 
-test('Osmeroznamenkasta lozinka djelatnika, ograničenje pokušaja i opoziv sesije',async()=>{
+test('Generirana lozinka djelatnika, ograničenje pokušaja i opoziv sesije',async()=>{
   const {cookie:admin}=await login('lena@formapoint.test');
   const {body:orgs}=await request('/admin/organizations',{cookie:admin});
   const org=orgs.find(x=>x.name==='ŠkoleHR').id, email='nastavnik-'+run+'@skolehr.test';

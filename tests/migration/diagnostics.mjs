@@ -3,9 +3,9 @@ import assert from 'node:assert/strict';
 import {MigrationFailure,migrationFailureMessage,runMigrationQueries} from '../../scripts/migration-diagnostics.ts';
 const denied=message=>Object.assign(new Error(message),{code:'42501'});
 test('Distinguishes denied advisory lock, base schema and native schema without continuing',async()=>{
-  for(const [failed,stage] of [[0,'lock'],[1,'schema'],[2,'native']]){
+  for(const [failed,stage] of [[0,'lock'],[1,'schema'],[2,'native'],[3,'passwords'],[4,'provisioning'],[5,'addresses'],[6,'welcomes']]){
     let calls=0;
-    await assert.rejects(runMigrationQueries({query:async()=>{if(calls++===failed)throw denied('permission denied for schema public');}},'BASE','NATIVE'),error=>{
+    await assert.rejects(runMigrationQueries({query:async()=>{if(calls++===failed)throw denied('permission denied for schema public');}},'BASE','NATIVE','PASSWORDS','PROVISIONING','ADDRESSES','WELCOMES'),error=>{
       assert.ok(error instanceof MigrationFailure);assert.equal(error.stage,stage);assert.equal(error.code,'42501');
       assert.match(migrationFailureMessage(error),/shema public/);return true;
     });

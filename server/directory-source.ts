@@ -1,4 +1,3 @@
-import {createHash} from 'node:crypto';
 import {z} from 'zod';
 
 export type DirectorySource='ednevnik'|'formapoint';
@@ -73,16 +72,20 @@ async function authUsers(config:DirectoryConfig){
   }
 }
 
-function personAddress(source:DirectorySource,domain:string,sourceEmail:string,subject:string){
+export function personAddress(source:DirectorySource,domain:string,sourceEmail:string,_subject:string,name?:string){
   const [local,origin]=sourceEmail.split('@');
   if(source==='ednevnik'){
     if(!['skolehr.xyz','eskole.me'].includes(origin) || reserved.has(local) || !/^[a-z0-9][a-z0-9._-]{0,63}$/.test(local))return;
     return local+'@'+domain;
   }
-  if(origin===domain && !reserved.has(local) && /^[a-z0-9][a-z0-9._-]{0,63}$/.test(local))return sourceEmail;
-  const prefix=local.replace(/[^a-z0-9]+/g,'.').replace(/^\.|\.$/g,'').slice(0,40)||'korisnik';
-  const suffix=createHash('sha256').update(subject).digest('hex').slice(0,16);
-  return `${prefix}.${suffix}@${domain}`;
+  // FormaPoint has already verified ownership of this source email. Its local part
+  // does not confer administrator privileges; collision checks protect existing mailboxes.
+  if(origin===domain && /^[a-z0-9][a-z0-9._-]{0,63}$/.test(local))return sourceEmail;
+  const words=(name||'').trim().split(/\s+/).filter(Boolean);
+  const clean=(value:string)=>value.toLowerCase().replace(/đ/g,'d').normalize('NFKD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,'.').replace(/^\.|\.$/g,'');
+  const fullName=words.length>=2&&!words.some(word=>word.includes('@'))?words.map(clean).filter(Boolean).join('.'):'';
+  const prefix=(fullName||clean(local)||'korisnik').slice(0,60).replace(/\.$/,'');
+  return `${prefix}@${domain}`;
 }
 
 export async function directoryPeople(config:DirectoryConfig){
@@ -90,7 +93,7 @@ export async function directoryPeople(config:DirectoryConfig){
   if(config.source==='formapoint'){
     return users.map(user=>({
       subject:user.id,name:(user.user_metadata?.full_name||user.user_metadata?.name||user.email!).trim().slice(0,240)||user.email!,
-      address:personAddress('formapoint',config.domain,user.email!,user.id)!,
+      address:personAddress('formapoint',config.domain,user.email!,user.id,user.user_metadata?.full_name||user.user_metadata?.name)!,
       sourceEmail:user.email!,kind:'formapoint' as const,schools:[],
     }));
   }

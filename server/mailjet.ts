@@ -2,8 +2,8 @@ import {db,transaction} from './db.js';
 import {HttpError,type Outgoing,demo} from './mail.js';
 import {enabledNativeAddress} from './inbound.js';
 
-export async function sendMailjet(account:string,input:Outgoing){
-  if(!enabledNativeAddress(account) || input.from!==account)throw new HttpError(403,'Pošiljatelj nije omogućen za probu.');
+export async function sendMailjet(account:string,input:Outgoing,fromName?:string){
+  if(!(await enabledNativeAddress(account)) || input.from!==account)throw new HttpError(403,'Pošiljatelj nije omogućen za probu.');
   const key=process.env.MAILJET_API_KEY,secret=process.env.MAILJET_SECRET_KEY;
   if(!key||!secret)throw new HttpError(503,'Mailjet nije konfiguriran.');
   // Test endpoint can only target loopback outside production. Production destination is fixed.
@@ -28,7 +28,7 @@ export async function sendMailjet(account:string,input:Outgoing){
     const response=await fetch(url,{method:'POST',redirect:'error',signal:AbortSignal.timeout(12_000),
       headers:{Authorization:'Basic '+Buffer.from(key+':'+secret).toString('base64'),'Content-Type':'application/json'},
       body:JSON.stringify({SandboxMode:sandbox,Messages:[{
-        From:{Email:input.from},To:input.to.map(Email=>({Email})),Subject:input.subject,TextPart:input.text,
+        From:{Email:input.from,...(fromName?{Name:fromName}:{})},To:input.to.map(Email=>({Email})),Subject:input.subject,TextPart:input.text,
         ...(input.replyTo?{ReplyTo:{Email:input.replyTo}}:{}),
         ...(input.inReplyTo?{Headers:{'In-Reply-To':input.inReplyTo,References:input.inReplyTo}}:{}),
         Attachments:input.attachments?.map(x=>({ContentType:'application/octet-stream',Filename:x.filename,Base64Content:x.content.toString('base64')})),
