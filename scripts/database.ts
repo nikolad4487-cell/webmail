@@ -14,7 +14,9 @@ try {
       and m.storage_kind='native' and not m.shared and m.active
       and exists(select 1 from grants g where g.box=m.id and g.uid=u.id) as verified
       from users u join mailboxes m on m.address=u.email
-      where u.source_project='heseilggogbtmqeuwlku' and u.source_email='admin@formapoint.online'`);
+      where u.source_project='heseilggogbtmqeuwlku' and u.source_email='admin@formapoint.online'
+        and exists(select 1 from audits a where a.uid=u.id and a.action='formapoint.address.correct'
+          and a.at=transaction_timestamp())`);
     if(check){
       if(!check.verified)throw new Error('FormaPoint address correction verification failed');
       console.log('WebmailHR: FormaPoint original address and personal mailbox verified.');
