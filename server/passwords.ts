@@ -4,6 +4,7 @@ import {verifyPassword} from './db.js';
 import {staffSecret,verifyFormaPoint,isLinkedFormaPoint} from './identity.js';
 
 export const newPassword=z.string().min(8,'Lozinka mora imati najmanje 8 znakova.').max(512);
+export const sharedPassword=newPassword.regex(/[a-z]/,'Lozinka mora sadržavati malo slovo.').regex(/[A-Z]/,'Lozinka mora sadržavati veliko slovo.').regex(/[0-9]/,'Lozinka mora sadržavati broj.');
 export const generatePassword=()=>String(randomInt(100_000_000)).padStart(8,'0');
 export type PasswordAccount={auth_kind:string;password:string|null;password_scheme:string;source_project:string|null;source_user_id:string|null;source_email:string|null};
 export async function matchesPassword(account:PasswordAccount,value:string){

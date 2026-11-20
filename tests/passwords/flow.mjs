@@ -104,25 +104,25 @@ test('Linked accounts always use FormaPoint, including older local overrides; ad
   await request('/admin/users/'+linked.id+'/password',{method:'POST',status:409});
   await saveUser(linked.email,'formapoint','Must-Not-Assign',{key:linked.id,source_user_id:'linked-source',source_email:'linked@external.test'}).then(()=>assert.fail('Expected rejection'),error=>assert.match(error.message,/409/));
 });
-test('WebmailHR changes the original source password; eight digits work in both locations and failures do not create overrides',async()=>{
+test('WebmailHR changes the original source password; eight mixed-case/digit characters work in both locations and failures do not create overrides',async()=>{
   const first=(await login(externalSelf.email,sourcePassword)).cookie;
   const second=(await login(externalSelf.email,sourcePassword)).cookie;
-  await request('/account/password',{session:first,body:{currentPassword:'wrong',newPassword:'87654321'},status:401});
+  await request('/account/password',{session:first,body:{currentPassword:'wrong',newPassword:'Abcd1234'},status:401});
   await request('/account/password',{session:first,body:{currentPassword:sourcePassword,newPassword:'7654321'},status:400});
   sourceWrongIdentity=true;
-  await request('/account/password',{session:first,body:{currentPassword:sourcePassword,newPassword:'87654321'},status:401});
+  await request('/account/password',{session:first,body:{currentPassword:sourcePassword,newPassword:'Abcd1234'},status:401});
   sourceWrongIdentity=false;sourceUpdateFailure=true;
-  await request('/account/password',{session:first,body:{currentPassword:sourcePassword,newPassword:'87654321'},status:503});
+  await request('/account/password',{session:first,body:{currentPassword:sourcePassword,newPassword:'Abcd1234'},status:503});
   sourceUpdateFailure=false;
   assert.equal((await db.query('select password from users where id=$1',[externalSelf.id])).rows[0].password,null);
-  await request('/account/password',{session:first,body:{currentPassword:sourcePassword,newPassword:'87654321'}});
-  assert.equal(sourcePasswords.get('self@external.test'),'87654321');
-  await login(externalSelf.email,sourcePassword,401);assert.ok((await login(externalSelf.email,'87654321')).cookie);
+  await request('/account/password',{session:first,body:{currentPassword:sourcePassword,newPassword:'Abcd1234'}});
+  assert.equal(sourcePasswords.get('self@external.test'),'Abcd1234');
+  await login(externalSelf.email,sourcePassword,401);assert.ok((await login(externalSelf.email,'Abcd1234')).cookie);
   for(const session of [first,second])await request('/me',{session,status:401});
   assert.equal((await db.query('select password from users where id=$1',[externalSelf.id])).rows[0].password,null);
   // A change from the original FormaPoint side immediately governs WebmailHR login.
-  sourcePasswords.set('self@external.test','12349876');
-  await login(externalSelf.email,'87654321',401);assert.ok((await login(externalSelf.email,'12349876')).cookie);
+  sourcePasswords.set('self@external.test','Zyxw9876');
+  await login(externalSelf.email,'Abcd1234',401);assert.ok((await login(externalSelf.email,'Zyxw9876')).cookie);
 });
 test('Student, anonymous user and other organization cannot assign or change another password',async()=>{
   await request('/account/password',{session:null,body:{currentPassword:initial,newPassword:changed},status:401});

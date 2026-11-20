@@ -14,7 +14,7 @@ export function ChangePassword({close,changed,shared}:{close:()=>void;changed:()
   }
   return <div className="modal-backdrop"><section className="modal" role="dialog" aria-modal="true" aria-labelledby="change-password-title">
     <div className="reader-heading"><h2 id="change-password-title">Promijeni lozinku</h2><button type="button" className="icon secondary" aria-label="Zatvori" disabled={busy} onClick={close}><X size={18}/></button></div>
-    <p>{shared?'Nova lozinka vrijedi za FormaPoint i WebmailHR.':'Odaberite novu lozinku za WebmailHR.'} Najmanje 8 znakova; dopuštene su i samo znamenke. Nakon spremanja prijavite se ponovno na svim uređajima.</p>
+    <p>{shared?'Nova lozinka vrijedi za FormaPoint i WebmailHR i mora sadržavati malo i veliko slovo te broj.':'Odaberite novu lozinku za WebmailHR.'} Najmanje 8 znakova. Nakon spremanja prijavite se ponovno na svim uređajima.</p>
     <form onSubmit={save}>
       <label>Trenutna lozinka<input name="currentPassword" type="password" autoComplete="current-password" maxLength={512} required disabled={busy}/></label>
       <label>Nova lozinka<span className="password"><input name="newPassword" type={visible?'text':'password'} autoComplete="new-password" minLength={8} maxLength={512} required disabled={busy}/><button type="button" className="icon ghost" aria-label={visible?'Sakrij novu lozinku':'Prikaži novu lozinku'} onClick={()=>setVisible(!visible)}>{visible?<EyeOff size={18}/>:<Eye size={18}/>}</button></span></label>

@@ -1,4 +1,4 @@
-import {matchesPassword,newPassword,verifyCurrentPassword} from './passwords.js';
+import {matchesPassword,newPassword,sharedPassword,verifyCurrentPassword} from './passwords.js';
 import {setupInbound} from './inbound.js';
 import {isNative,changeNative,MAX_NATIVE_BYTES} from './native-mail.js';
 import {invalidLogin,verifyFormaPoint,verifyStudent,isLinkedFormaPoint,changeFormaPointPassword} from './identity.js';
@@ -202,6 +202,7 @@ api.post('/account/password',async(req,res)=>{
   const {rows:[account]}=await db.query('select * from users where id=$1 and active',[a.id]);
   if(!account || !['staff','formapoint','local'].includes(account.auth_kind))return deny();
   const shared=isLinkedFormaPoint(account);
+  if(shared)sharedPassword.parse(input.newPassword);
   if(!shared&&!await verifyCurrentPassword(account,input.currentPassword))throw invalidLogin();
   if(input.currentPassword===input.newPassword)throw new HttpError(400,'Odaberite drukčiju novu lozinku.');
   const hash=shared?null:await hashPassword(input.newPassword);

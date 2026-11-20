@@ -607,11 +607,11 @@ prijava uvijek provjerava aktualnu lozinku izvora.
 
 FormaPoint profil ima obrazac s trenutačnom, novom i potvrdom lozinke. Koristi
 Supabase provjeru aktualnog korisnika, ponovnu vlastitu prijavu i `updateUser`.
-Obje lokacije zahtijevaju najmanje 8 znakova i prihvaćaju znamenke bez obaveznog
-slova ili simbola. Povezani računi isključeni su iz dodjele zasebnih lozinki u
+Povezane FormaPoint lozinke na obje lokacije zahtijevaju najmanje 8 znakova,
+barem jedno malo slovo, jedno veliko slovo i jednu znamenku. Simbol nije obavezan. Povezani računi isključeni su iz dodjele zasebnih lozinki u
 administraciji i skupnog generiranja. Lozinke se ne zapisuju u logove.
 
-Provjera: 6 testova promjene lozinki, uključujući osam znamenki, promjene s obje
+Provjera: 6 testova promjene lozinki, uključujući osam znakova sa slovima i brojem, promjene s obje
 strane, krivu lozinku/UUID, nedostupan izvor i zaštitu od lokalnog overridea;
 13 FormaPoint, 12 native i 5 welcome regresijskih testova te produkcijski build.
 FormaPoint ima dodatne testove vlastitog obrasca/helpera i jednokratnu, zasebno
