@@ -25,6 +25,7 @@ test('Configuration errors have fixed codes and do not call HTTPS',async()=>{
 test('Copied outer whitespace is removed; MIME signature and destination remain exact',async()=>{
   const r=await run({INBOUND_SECRET:' '+secret+'\n',INBOUND_URL:env.INBOUND_URL+'\n'},async(url,options)=>{
     assert.equal(url,env.INBOUND_URL);
+    assert.equal(options.redirect,'manual');
     const h=options.headers;
     const expected=createHmac('sha256',secret).update([h['X-Webmail-Timestamp'],'sender@example.test','demo@skolehr.xyz',h['X-Webmail-Sha256']].join('\n')).digest('hex');
     assert.equal(h['X-Webmail-Signature'],expected);

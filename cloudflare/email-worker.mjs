@@ -1,5 +1,5 @@
 // No forwarding address: SMTP envelope and original MIME go directly to WebmailHR.
-export const MAX_RAW_BYTES=3_000_000;
+const MAX_RAW_BYTES=3_000_000;
 const hex=bytes=>Array.from(new Uint8Array(bytes),x=>x.toString(16).padStart(2,'0')).join('');
 class DeliveryError extends Error {
   constructor(code){super(code);this.code=code;}
@@ -34,7 +34,8 @@ async function receive(message,env){
       let response;
       failure='HTTPS_FETCH';
       try{
-        response=await fetch(url,{method:'POST',redirect:'error',signal:AbortSignal.timeout(15_000),body:raw,
+        // workerd supports only follow/manual; manual keeps signed MIME off redirect targets.
+        response=await fetch(url,{method:'POST',redirect:'manual',signal:AbortSignal.timeout(15_000),body:raw,
           headers:{'Content-Type':'message/rfc822','X-Webmail-Timestamp':timestamp,'X-Webmail-From':message.from,
             'X-Webmail-To':to,'X-Webmail-Sha256':sha,'X-Webmail-Signature':signature}});
         failure='HTTP_'+response.status;
