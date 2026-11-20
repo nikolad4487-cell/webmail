@@ -22,6 +22,7 @@ before(async()=>{
   for(const file of ['server/schema.sql','migrations/001-native-mail.sql','migrations/002-mail-passwords.sql','migrations/003-mailbox-provisioning.sql'])await db.query(await readFile(new URL('../../'+file,import.meta.url),'utf8'));
   org=(await db.query("insert into organizations(name) values('FormaPoint') returning id")).rows[0].id;
   await db.query("insert into domains(name,org) values('formapoint.online',$1)",[org]);
+  await db.query(await readFile(new URL('../../migrations/006-school-mailboxes.sql',import.meta.url),'utf8'));
   const {default:app}=await import('../../server/app.ts');server=app.listen(0,'127.0.0.1');await once(server,'listening');base='http://127.0.0.1:'+server.address().port;
 });
 after(async()=>{server?.close();await db?.end();});

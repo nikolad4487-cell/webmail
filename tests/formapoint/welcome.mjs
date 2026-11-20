@@ -20,6 +20,7 @@ before(async()=>{
  for(const file of ['server/schema.sql','migrations/001-native-mail.sql','migrations/002-mail-passwords.sql','migrations/003-mailbox-provisioning.sql','migrations/005-formapoint-welcome.sql'])await db.query(await readFile(new URL('../../'+file,import.meta.url),'utf8'));
  org=(await db.query("insert into organizations(name) values('FormaPoint') returning id")).rows[0].id;
  await db.query("insert into domains(name,org,mailbox_backend) values('formapoint.online',$1,'native')",[org]);
+ await db.query(await readFile(new URL('../../migrations/006-school-mailboxes.sql',import.meta.url),'utf8'));
  ({queueFormaPointWelcome:queue,deliverFormaPointWelcomes:deliver}=await import('../../server/formapoint-welcome.ts'));
  server=createServer(async(req,res)=>{let raw='';for await(const chunk of req)raw+=chunk;sent.push(JSON.parse(raw));res.setHeader('Content-Type','application/json');res.statusCode=fail?500:200;res.end(JSON.stringify({Messages:[{Status:fail?'error':'success'}]}));}).listen(0,'127.0.0.1');await once(server,'listening');
  process.env.MAILJET_TEST_URL='http://127.0.0.1:'+server.address().port;

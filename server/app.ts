@@ -9,6 +9,7 @@ import {addressing,append,archiveDraft,demo,folder,HttpError,imap,listing,messag
 import {email,id,user,deny} from './http.js';
 import {setupData} from './workspace.js';
 import {setupAutomation} from './automation.js';
+import {setupSchoolAdmin,setupSchoolEndpoints,schoolSource,syncSchoolPerson} from './school-mailboxes.js';
 import {setupFormaPointMailboxes} from './formapoint-mailboxes.js';
 
 const app=express(), api=express.Router(), production=process.env.NODE_ENV==='production';
@@ -41,6 +42,7 @@ app.use((_req,res,next)=>{
   next();
 });
 setupInbound(app,host=>publicHosts.has(host)||(!production&&!origin&&host.startsWith('127.0.0.1:')));
+setupSchoolEndpoints(app,host=>publicHosts.has(host)||(!production&&!origin&&host.startsWith('127.0.0.1:')));
 setupFormaPointMailboxes(app,host=>publicHosts.has(host)||(!production&&!origin&&host.startsWith('127.0.0.1:')));
 app.use('/api',express.json({limit:'17mb'}),(_req,res,next)=>{res.set('Cache-Control','no-store');next();},api);
 api.use((req,_res,next)=>{
@@ -97,9 +99,10 @@ async function signIn(req:Request,res:Response,adminLogin=false){
   if(!address.success && (adminLogin || identifier.includes('@'))) throw invalidLogin();
   const rateKey='login:'+(adminLogin?'admin:':'')+loginName.toLowerCase();
   await limit('ip:'+req.ip,80);
-  const {rows:matches}=address.success ? await db.query(
+  const lookup=address.success?address.data:/^[a-z0-9][a-z0-9._-]{0,63}$/i.test(identifier)?identifier.toLowerCase()+'@skolehr.xyz':undefined;
+  const {rows:matches}=lookup ? await db.query(
     'select id,email,auth_kind,password,password_scheme,role,active,source_project,source_user_id,source_email from users where email=$1 or source_email=$1',
-    [address.data]) : {rows:[]};
+    [lookup]) : {rows:[]};
   const linked=matches.length===1 && matches[0].active ? matches[0] : undefined;
   const studentIdentifier=!address.success || studentDomains.has(address.data.split('@').at(-1)!);
   const kind=adminLogin?'local':linked?.auth_kind ?? (matches.length===0 && studentIdentifier?'ednevnik':undefined);
@@ -110,9 +113,13 @@ async function signIn(req:Request,res:Response,adminLogin=false){
   let source:{projectId:string;userId:string}|undefined;
   let checkedSourceEmail:string|null=null;
   if(kind==='ednevnik'){
-    source=await verifyStudent(loginName,password);
-    const {rows:[account]}=await db.query('select id from users where auth_kind=$1 and source_project=$2 and source_user_id=$3 and active',
+    let sourceLogin=loginName;
+    if(linked){const {rows:[school]}=await db.query('select source_login from school_mail_identities where uid=$1',[linked.id]).catch(()=>({rows:[]}));if(school)sourceLogin=school.source_login;}
+    if(process.env.SCHOOL_SYNC_TOKEN){const verified=await schoolSource({action:'family-login',username:sourceLogin,password});source={projectId:process.env.EDNEVNIK_SUPABASE_PROJECT_ID!,userId:String(verified.user_id)};}
+    else source=await verifyStudent(sourceLogin,password);
+    let {rows:[account]}=await db.query('select id from users where auth_kind=$1 and source_project=$2 and source_user_id=$3 and active',
       [kind,source.projectId,source.userId]);
+    if(!account&&process.env.SCHOOL_SYNC_TOKEN){const roster=await schoolSource({action:'roster-person',subject:source.userId});if(roster.project!==source.projectId)throw invalidLogin();const person=roster.people?.find((p:any)=>p.subject===source!.userId);if(person&&['student','parent'].includes(person.kind)){const synced=await syncSchoolPerson(person,'login-'+source.userId);account={id:synced.uid};}}
     if(linked && account?.id!==linked.id) throw invalidLogin();
     if(!account) throw noMailbox();
     verifiedId=account.id;
@@ -191,7 +198,7 @@ setupAutomation(api);
 api.use(async (req,_res,next)=>{
   const key=session(req);
   if(!key) throw new HttpError(401,'Prijavite se za nastavak.');
-  const {rows:[account]}=await db.query(`select u.id,u.org,u.email,u.name,u.role,u.auth_kind,(u.auth_kind='formapoint' and u.source_project is not null and u.source_user_id is not null and u.source_email is not null) as shared_password from users u join sessions s on s.uid=u.id where s.token=$1 and s.expires>now() and u.active and (u.auth_kind<>'local' or ${localAccount})`,[digest(key),demo]);
+  const {rows:[account]}=await db.query(`select u.id,u.org,u.school,u.email,u.name,u.role,u.auth_kind,(u.auth_kind='formapoint' and u.source_project is not null and u.source_user_id is not null and u.source_email is not null) as shared_password from users u join sessions s on s.uid=u.id where s.token=$1 and s.expires>now() and u.active and (u.auth_kind<>'local' or ${localAccount})`,[digest(key),demo]);
   if(!account || (adminOrigin && (account.role==='root')!==isAdminSite(req))) throw new HttpError(401,'Sesija je istekla.');
   Object.assign(req,{account}); next();
 });
@@ -214,6 +221,7 @@ api.post('/account/password',async(req,res)=>{
       !(await c.query('select 1 from sessions where token=$1 and uid=$2 and expires>now()',[digest(session(req)!),a.id])).rowCount)throw new HttpError(401,'Sesija je istekla. Prijavite se ponovno.');
     if(shared)await changeFormaPointPassword(current.source_email,input.currentPassword,input.newPassword,{projectId:current.source_project,userId:current.source_user_id});
     await c.query("update users set password=$2,password_scheme='scrypt' where id=$1",[a.id,hash]);
+    await c.query('update school_mail_identities set initial_password=null where uid=$1',[a.id]);
     await c.query('delete from sessions where uid=$1',[a.id]);
     await c.query('delete from resets where uid=$1',[a.id]);
     await c.query('insert into audits(uid,action,target) values($1,$2,$3)',[a.id,'password.change',String(a.id)]);
@@ -317,6 +325,7 @@ api.post('/mail/:box/send',async(req,res)=>{
   res.json({ok:true,warning:warnings.join(' ') || undefined});
 });
 setupData(api);
+setupSchoolAdmin(api);
 app.use('/api',(_req,res)=>res.status(404).json({error:'Radnja nije pronađena.'}));
 app.use((err:unknown,_req:express.Request,res:express.Response,_next:express.NextFunction)=>{
   if(err instanceof DatabaseUnavailable) {res.status(err.status).json({error:err.message,code:err.code});return;}

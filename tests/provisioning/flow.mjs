@@ -55,6 +55,7 @@ before(async()=>{
   const managed=await createUser('managed@skolehr.xyz');
   await db.query("insert into directory_identities values('local','managed',$1)",[managed.id]);
   await migrate();await migrate();
+  await db.query(await readFile(new URL('../../migrations/006-school-mailboxes.sql',import.meta.url),'utf8'));
   const {default:app}=await import('../../server/app.ts');
   server=app.listen(0,'127.0.0.1');await once(server,'listening');base='http://127.0.0.1:'+server.address().port;
 });

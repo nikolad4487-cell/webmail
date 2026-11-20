@@ -10,9 +10,11 @@ try {
   const passwords=await readFile(new URL('../migrations/002-mail-passwords.sql', import.meta.url),'utf8');
   const provisioning=await readFile(new URL('../migrations/003-mailbox-provisioning.sql', import.meta.url),'utf8');
   const addresses=await readFile(new URL('../migrations/004-formapoint-original-address.sql', import.meta.url),'utf8');
+  const schoolMail=await readFile(new URL('../migrations/006-school-mailboxes.sql', import.meta.url),'utf8');
   const welcomes=await readFile(new URL('../migrations/005-formapoint-welcome.sql', import.meta.url),'utf8');
   await transaction(async client=>{
     await runMigrationQueries(client,schema,native,passwords,provisioning,addresses,welcomes);
+    await client.query(schoolMail);
     const renamed=await shortenExistingFormaPointAddresses(client);
     const {rows:changed}=await client.query(`select u.id,m.id box from users u join mailboxes m on m.address=u.email
       where exists(select 1 from audits a where a.uid=u.id and a.action='formapoint.address.shorten' and a.at=transaction_timestamp())`);

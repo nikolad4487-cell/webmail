@@ -12,7 +12,7 @@ let db,server,sourceServer,base,admin,staff,linked,externalSelf,student,otherAdm
 let sourceCalls=0,sourceUpdateFailure=false,sourceWrongIdentity=false;
 const sourcePasswords=new Map();
 const sourceIdentity=email=>email.startsWith('self')?'self-source':email.startsWith('bulk')?'linked-source-bulk':'linked-source';
-const sourcePassword='External-Password-2026',initial='Assigned-Password-2026',changed='87654321';
+const sourcePassword='External-Password-2026',initial='Assigned-Password-2026',changed='Newpass1';
 async function request(path,{session=admin,body,method=body?'POST':'GET',status=200}={}){
   const r=await fetch(base+'/api'+path,{method,headers:{...(session?{cookie:session}:{}),...(body?{'Content-Type':'application/json'}:{})},body:body?JSON.stringify(body):undefined});
   const output=await r.text();assert.equal(r.status,status,path+' '+output);
@@ -37,6 +37,7 @@ before(async()=>{
   staff=(await db.query("insert into users(org,email,name,password,auth_kind) values($1,'legacy@skolehr.test','Legacy',$2,'staff') returning *",[org,await hashPassword(staffSecret('12345678'))])).rows[0];
   const migration=await readFile(new URL('../../migrations/002-mail-passwords.sql',import.meta.url),'utf8');
   await db.query(migration);await db.query(migration);
+  await db.query(await readFile(new URL('../../migrations/006-school-mailboxes.sql',import.meta.url),'utf8'));
   assert.equal((await db.query('select password_scheme from users where id=$1',[staff.id])).rows[0].password_scheme,'staff_pin');
   sourceServer=createServer(async(req,res)=>{
     sourceCalls++;let body='';for await(const c of req)body+=c;const input=JSON.parse(body);
@@ -70,9 +71,9 @@ before(async()=>{
 });
 after(async()=>{server?.close();sourceServer?.close();await db?.end();});
 
-test('Admin assigns ordinary staff/FormaPoint passwords; generator creates exactly eight digits',async()=>{
+test('Admin assigns ordinary staff/FormaPoint passwords; generator creates eight mixed-case/digit characters',async()=>{
   const generated=(await request('/admin/passwords/generate',{method:'POST'})).body.password;
-  assert.match(generated,/^[0-9]{8}$/);
+  assert.match(generated,/^[a-zA-Z0-9]{8}$/);
   for(const [address,kind]of [['assigned@skolehr.test','staff'],['assigned@formapoint.test','formapoint']]){
     const u=await saveUser(address,kind,initial);
     const first=(await login(address,initial)).cookie;assert.ok(first);
@@ -95,6 +96,7 @@ test('Old staff PIN survives migration; self-change revokes every session and ne
   for(const session of [first,second])await request('/me',{session,status:401});
   await login(staff.email,'12345678',401);assert.ok((await login(staff.email,changed)).cookie);
   await db.query(await readFile(new URL('../../migrations/002-mail-passwords.sql',import.meta.url),'utf8'));
+  await db.query(await readFile(new URL('../../migrations/006-school-mailboxes.sql',import.meta.url),'utf8'));
   assert.equal((await db.query('select password_scheme from users where id=$1',[staff.id])).rows[0].password_scheme,'scrypt');
 });
 test('Linked accounts always use FormaPoint, including older local overrides; administrators cannot split their password',async()=>{
@@ -102,7 +104,7 @@ test('Linked accounts always use FormaPoint, including older local overrides; ad
   await db.query('update users set password=$2 where id=$1',[linked.id,await hashPassword('old-local-password')]);
   await login(linked.email,'old-local-password',401);assert.ok((await login(linked.email,sourcePassword)).cookie);
   await request('/admin/users/'+linked.id+'/password',{method:'POST',status:409});
-  await saveUser(linked.email,'formapoint','Must-Not-Assign',{key:linked.id,source_user_id:'linked-source',source_email:'linked@external.test'}).then(()=>assert.fail('Expected rejection'),error=>assert.match(error.message,/409/));
+  await saveUser(linked.email,'formapoint','Must-Not-Assign1',{key:linked.id,source_user_id:'linked-source',source_email:'linked@external.test'}).then(()=>assert.fail('Expected rejection'),error=>assert.match(error.message,/409/));
 });
 test('WebmailHR changes the original source password; eight mixed-case/digit characters work in both locations and failures do not create overrides',async()=>{
   const first=(await login(externalSelf.email,sourcePassword)).cookie;

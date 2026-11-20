@@ -53,6 +53,7 @@ before(async()=>{
     else res.end(JSON.stringify({Messages:[{Status:'success',To:[{Email:'sender@example.test'}]}]}));
   }).listen(0,'127.0.0.1');await once(jetServer,'listening');
   process.env.MAILJET_TEST_URL='http://127.0.0.1:'+jetServer.address().port+'/v3.1/send';
+  await db.query(await readFile(new URL('../../migrations/006-school-mailboxes.sql',import.meta.url),'utf8'));
   const {default:app}=await import('../../server/app.ts');
   appServer=app.listen(0,'127.0.0.1');await once(appServer,'listening');base='http://127.0.0.1:'+appServer.address().port;
   cookie=(await request('/login',{body:{identifier:'demo@skolehr.xyz',password:'12345678'},session:null})).cookie;

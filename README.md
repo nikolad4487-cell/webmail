@@ -616,3 +616,64 @@ strane, krivu lozinku/UUID, nedostupan izvor i zaštitu od lokalnog overridea;
 13 FormaPoint, 12 native i 5 welcome regresijskih testova te produkcijski build.
 FormaPoint ima dodatne testove vlastitog obrasca/helpera i jednokratnu, zasebno
 upravljanu produkcijsku provjeru pravila izvornog Auth sustava.
+
+## Školski sandučići i podaci za prijavu
+
+Ova integracija povezuje vlastite ŠkoleHR aplikacije e-Matica/e-Dnevnik koje koriste
+školski Supabase projekt. Ne povezuje službene CARNET sustave. Izvorni e-Dnevnik
+repozitorij i njegov PIN/TOTP postupak ostaju neizmijenjeni.
+
+- Učenici i roditelji koriste izvornu e-Dnevnik lozinku. WebmailHR ne sprema njezinu
+  čitljivu vrijednost i ne dopušta promjenu kroz svoj obrazac. Pri prvoj uspješnoj
+  prijavi izvornim školskim korisničkim imenom može stvoriti nedostajući sandučić.
+- Nastavnici/djelatnici dobivaju zasebnu nasumičnu lozinku za mail: osam znakova s
+  malim i velikim slovom i znamenkom. Promjena te lozinke ne poziva izvor niti
+  mijenja PIN. Početna lozinka čuva se šifrirana za izdavanje PDF-a najviše sedam
+  dana, a promjena lozinke uklanja primjerak za ispis.
+- Nove adrese koriste ime.prezime bez kvačica, zatim ime.prezime2, ime.prezime3.
+  Stabilni izvorni identitet čuva adresu kroz ponovne sinkronizacije; postojeći
+  ručni računi ne preuzimaju se samo zbog podudaranja imena.
+- Root gumb **Sinkroniziraj škole** obrađuje paginirani imenik. Dnevni cron u
+  03:00 UTC obrađuje jednu stranicu od najviše 30 izvornih profila, čuva nastavak i
+  ne prekoračuje Hobby raspored. Za veću početnu populaciju root može ponoviti
+  ručno osvježenje; jedan klik obrađuje do 20 stranica. Obnova školske godine
+  osvježava datum povezanosti do 31. listopada godine završetka dostupne izvorne
+  školske godine. Nedostajući izvorni datum ne izmišlja se.
+- Dovršena pouzdana snimka gasi nedostajuće uvezene identitete. Neuspjeli ili
+  konfliktni pregled ih ne briše. Promjena vrste identiteta zaustavlja prethodni
+  pristup do administratorske provjere. Root računi se ne gase tim postupkom.
+
+Migracija `006-school-mailboxes.sql` dodaje privatnu školsku vezu i stanje
+sinkronizacije u WebmailHR PostgreSQL, sa server-only RLS pravilima. PDF koristi
+predložak `shared/school-credential.mjs` i licencirane Noto Sans fontove iz
+`assets/fonts` (OFL.txt). Ispis sadrži samo dostupne izvorne osobne i školske podatke.
+Učenički/roditeljski redovni PDF ne otkriva postojeću lozinku. Izdavanje nove
+učeničke lozinke dostupno je samo ovlaštenom školskom administratoru iz e-Matice:
+prvo se provjeri škola i izvorni UUID, zatim se promijeni samo učenička Auth lozinka
+i preuzme PDF. PIN, TOTP i nastavničke vjerodajnice iz izvora ne dohvaćaju se ni
+mijenjaju. PDF se šalje uz no-store; tajne nisu u URL-u ili logovima.
+
+Produkcijska aktivacija zahtijeva izričito odobrenje za:
+
+1. Spremanje novih nasumičnih `SCHOOL_SYNC_TOKEN` i `CRON_SECRET` kao serverskih
+   Production secrets u Vercel projektu WebmailHR. Nikad ne koristiti VITE_*.
+2. Objavu `integrations/school-bridge/{index,handler}.ts` kao Supabase Edge Function
+   `webmail-school-bridge` u školskom projektu. `verify_jwt=false` koristi se samo
+   zato što funkcija sama provjerava 256-bitni servisni ključ preko javnog SHA-256
+   otiska, odnosno za korisničko izdavanje provjerava stvarni JWT kroz Auth `/user`
+   i školske uloge kroz bazu. Posjedovanje servisnog ključa ne dopušta izdavanje
+   učeničkih lozinki. Za njega je potrebna ovlaštena korisnička školska sesija.
+3. Objavu WebmailHR i e-Matica izmjena, primjenu migracije i početnu provjeru
+   imenika. Izvorne Supabase tablice nisu mijenjane. Ključ se ne objavljuje u kodu;
+   u Edge kodu nalazi se samo javni otisak za provjeru.
+
+Status prije aktivacije: kod i predložak testirani su lokalno, ali servisni ključ
+nije spremljen u Vercel jer je automatska provjera odobrenja tražila izričitu
+potvrdu korisnika za odredište. Nova školska funkcija još nije objavljena i stvarnom
+učeniku nije izdana lozinka radi testiranja.
+
+Provjere: `TEST_SCHOOL_DATABASE_URL=... npm run test:schools` (prazna lokalna baza),
+uključuje opseg škole, nepromijenjen PIN, učenika/roditelja, Unicode PDF, promjenu
+učiteljske lozinke i nedostupan izvor. Regresije: native, provisioning, lozinke,
+FormaPoint, welcome, Prisma-style migracije/RLS i build. e-Matica ima svoj build i
+testove. PDF je renderiran i vizualno pregledan s izmišljenim podacima.
