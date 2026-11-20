@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {createServer,request as httpRequest} from 'node:http';
 import {once} from 'node:events';
 import {readFile} from 'node:fs/promises';
-import {createHash,createHmac} from 'node:crypto';
+import {createHash,createHmac,randomBytes} from 'node:crypto';
 import worker from '../../cloudflare/email-worker.mjs';
 
 if(!process.env.TEST_DATABASE_URL)throw new Error('Set TEST_DATABASE_URL to an isolated disposable PostgreSQL database.');
@@ -167,4 +167,92 @@ test('Worker odbija poruku nakon iscrpljenih HTTPS pokušaja; Mailjet kvota sprj
   const previous=sent.length;
   await request('/mail/'+box+'/send',{body:{from:'demo@skolehr.xyz',to:['sender@example.test'],subject:'Quota',text:'Quota'},status:429});
   assert.equal(sent.length,previous);delete process.env.MAILJET_DAILY_RECIPIENTS;
+});
+
+let nativeRoot,nativeOrg,viktorBox,viktorUid,viktorCookie;
+async function adminRequest(path,{body,method=body?'POST':'GET',status=200}={}){
+  return new Promise((resolve,reject)=>{
+    const req=httpRequest(base+'/api'+path,{method,headers:{host:'admin.localhost',cookie:nativeRoot,...(body?{'Content-Type':'application/json'}:{})}},res=>{
+      let output='';res.on('data',chunk=>{output+=chunk;});res.on('end',()=>{
+        try{assert.equal(res.statusCode,status,path+' '+output);resolve(JSON.parse(output));}catch(e){reject(e);}
+      });
+    });
+    req.on('error',reject);req.end(body?JSON.stringify(body):undefined);
+  });
+}
+test('Samo root uključuje native sandučić; serverska allowlista i osobni vlasnik su obavezni',async()=>{
+  const {hashPassword,digest}=await import('../../server/db.ts');
+  nativeOrg=(await db.query('select org from mailboxes where id=$1',[box])).rows[0].org;
+  const root=(await db.query("insert into users(org,email,name,password,role) values($1,'root@formapoint.test','Root',$2,'root') returning id",[nativeOrg,await hashPassword('local-root-password')])).rows[0].id;
+  const key=randomBytes(32).toString('hex');nativeRoot='wm_session='+key;
+  await db.query("insert into sessions values($1,$2,now()+interval '1 hour')",[digest(key),root]);
+  viktorUid=(await db.query("insert into users(org,email,name,password,auth_kind) values($1,'viktor.beljan@skolehr.xyz','Viktor',$2,'staff') returning id",[nativeOrg,await hashPassword('87654321')])).rows[0].id;
+  viktorBox=(await db.query("insert into mailboxes(org,address,label) values($1,'viktor.beljan@skolehr.xyz','Viktor') returning id",[nativeOrg])).rows[0].id;
+  const route='/admin/mailboxes/'+viktorBox+'/native';
+  await request(route,{method:'POST',status:403});
+  await db.query("update users set role='admin' where email='other@formapoint.test'");
+  await request(route,{method:'POST',session:otherCookie,status:403});
+  await db.query("update users set role='user' where email='other@formapoint.test'");
+  await adminRequest(route,{method:'POST',status:409}); // Not allowlisted.
+  process.env.NATIVE_ENABLED_ADDRESSES+=',viktor.beljan@skolehr.xyz';
+  await adminRequest(route,{method:'POST',status:409}); // No owner.
+  await db.query('insert into grants(uid,box,can_send) values($1,$2,false)',[viktorUid,viktorBox]);
+  await adminRequest(route,{method:'POST',status:409}); // Cannot send.
+  await db.query('update grants set can_send=true where box=$1',[viktorBox]);
+  await db.query('update users set active=false where id=$1',[viktorUid]);
+  await adminRequest(route,{method:'POST',status:409});
+  await db.query('update users set active=true where id=$1',[viktorUid]);
+  const otherUid=(await db.query("select id from users where email='other@formapoint.test'")).rows[0].id;
+  await db.query('insert into grants(uid,box,can_send) values($1,$2,true)',[otherUid,viktorBox]);
+  await adminRequest(route,{method:'POST',status:409}); // Multiple owners.
+  await db.query('delete from grants where uid=$1 and box=$2',[viktorUid,viktorBox]);
+  await adminRequest(route,{method:'POST',status:409}); // Wrong email, even in same org.
+  await db.query('delete from grants where box=$1',[viktorBox]);
+  await db.query('insert into grants(uid,box,can_send) values($1,$2,true)',[viktorUid,viktorBox]);
+  assert.equal((await db.query('select storage_kind from mailboxes where id=$1',[viktorBox])).rows[0].storage_kind,'imap');
+});
+test('Native aktivacija odbija zajednički, neaktivni i sinkronizirani IMAP sandučić te isključenu domenu',async()=>{
+  const route='/admin/mailboxes/'+viktorBox+'/native';
+  for(const change of ['shared=true','active=false']){
+    await db.query('update mailboxes set '+change+' where id=$1',[viktorBox]);
+    await adminRequest(route,{method:'POST',status:409});
+    await db.query('update mailboxes set shared=false,active=true where id=$1',[viktorBox]);
+  }
+  await db.query("update domains set outbound=false where name='skolehr.xyz'");
+  await adminRequest(route,{method:'POST',status:409});
+  await db.query("update domains set outbound=true where name='skolehr.xyz'");
+  await db.query("insert into directory_identities values('local-test','viktor',$1)",[viktorUid]);
+  await db.query("insert into directory_mailboxes(box,uid,encrypted_password) values($1,$2,'test-only')",[viktorBox,viktorUid]);
+  await adminRequest(route,{method:'POST',status:409});
+  await db.query('delete from directory_identities where uid=$1',[viktorUid]);
+  const secret=process.env.MAILJET_SECRET_KEY;delete process.env.MAILJET_SECRET_KEY;
+  try{await adminRequest(route,{method:'POST',status:503});}finally{process.env.MAILJET_SECRET_KEY=secret;}
+});
+test('Native uključivanje je idempotentno, čuva dodjelu i izolira stvarni drugi osobni sandučić',async()=>{
+  const route='/admin/mailboxes/'+viktorBox+'/native';
+  await adminRequest(route,{method:'POST'});await adminRequest(route,{method:'POST'});
+  const rows=await adminRequest('/admin/mailboxes');assert.equal(rows.find(x=>x.id===viktorBox).storage_kind,'native');
+  assert.equal((await db.query("select count(*)::int n from audits where action='mailbox.native.enable' and target=$1",[String(viktorBox)])).rows[0].n,1);
+  assert.equal((await db.query('select storage_kind from mailboxes where id=$1',[otherBox])).rows[0].storage_kind,'imap');
+  viktorCookie=(await request('/login',{session:null,body:{identifier:'viktor.beljan@skolehr.xyz',password:'87654321'}})).cookie;
+  assert.deepEqual((await request('/me',{session:viktorCookie})).body.boxes.map(x=>x.id),[viktorBox]);
+  const {mime}=await import('../../server/mail.ts');
+  const bytes=await mime({from:'sender@example.test',to:['viktor.beljan@skolehr.xyz'],subject:'Viktor personal',text:'Private mail',attachments:[{filename:'viktor.txt',content:Buffer.from('Viktor only')}]});
+  assert.equal((await deliver(bytes,headers(bytes,'viktor.beljan@skolehr.xyz'))).status,201);
+  const row=(await request('/mail/'+viktorBox,{session:viktorCookie})).body[0];
+  const query=new URLSearchParams({path:row.path,id:row.id});
+  assert.equal((await request('/mail/'+viktorBox+'/attachment?'+query+'&index=0',{session:viktorCookie})).body,'Viktor only');
+  await request('/mail/'+viktorBox+'/message?'+query,{status:403});
+  await request('/mail/'+box,{session:viktorCookie,status:403});
+  await request('/mail/'+viktorBox+'/send',{session:viktorCookie,body:{from:'viktor.beljan@skolehr.xyz',to:['sender@example.test'],subject:'Viktor reply',text:'Reply'}});
+  assert.equal(sent.at(-1).body.Messages[0].From.Email,'viktor.beljan@skolehr.xyz');
+});
+test('Administracija čuva adresu i osobnu dodjelu aktiviranog native sandučića',async()=>{
+  const update={key:viktorBox,org:nativeOrg,address:'viktor.beljan@skolehr.xyz',label:'Viktor',shared:false,active:true,target_quota_gb:15};
+  await adminRequest('/admin/mailboxes',{body:{...update,address:'other@skolehr.xyz'},status:409});
+  await adminRequest('/admin/mailboxes',{body:{...update,shared:true},status:409});
+  await adminRequest('/admin/mailboxes',{body:{...update,storage_kind:'imap'}});
+  assert.equal((await db.query('select storage_kind from mailboxes where id=$1',[viktorBox])).rows[0].storage_kind,'native');
+  const otherUid=(await db.query("select id from users where email='other@formapoint.test'")).rows[0].id;
+  await adminRequest('/admin/access/'+viktorBox,{method:'PUT',body:{kind:'grant',uid:otherUid,remove:false,can_send:true,can_calendar:false},status:409});
 });

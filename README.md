@@ -185,9 +185,32 @@ poruke po `box`, postojeće dodjele i globalni budget. Dodavanje zahtijeva provj
 vlasnika, native oznaku i proširenje obje allowliste; pilot skripta namjerno
 mijenja samo demo. Masovna aktivacija i prelazak DNS-a ostaju zaseban korak.
 
+### Uključivanje dodatnog osobnog sandučića
+
+1. Dodajte korisnika i aktivni osobni sandučić u istoj organizaciji. U ovlastima
+   dodijelite sandučić samo aktivnom korisniku iste e-mail adrese, uz ovlast slanja.
+2. Dodajte adresu u Vercelovu serversku postavku `NATIVE_ENABLED_ADDRESSES`
+   (adrese odvojene zarezima, uz postojeći demo) i ponovno objavite aplikaciju.
+3. Kao glavni administrator otvorite **Sandučići → Uredi → Uključi Cloudflare / Mailjet**.
+   `POST /api/admin/mailboxes/:box/native` provjerava vlasnika, aktivnost, domenu
+   s uključenim primitkom/slanjem i serverske postavke. Ponavljanje je idempotentno.
+   Sinkronizirani IMAP sandučići i zajednički sandučići se odbijaju; ostali ostaju
+   na IMAP/SMTP-u. Postojeće IMAP poruke se ne prenose. Native kvota dolazi iz
+   `NATIVE_MAILBOX_BYTES`, a ciljana IMAP kvota u GB nema učinka na native pohranu.
+4. U Workerov `ENABLED_RECIPIENTS` dodajte istu adresu i kliknite **Deploy**.
+   U Cloudflare Email Routing dodajte točnu adresu uz **Send to a Worker → webmailhr-inbound**.
+   Novi sandučić na domeni koja već koristi Cloudflare MX ne zahtijeva novu MX promjenu.
+5. Provjerite poruku s Gmaila, privitak, odgovor i zabranu pristupa drugom korisniku.
+   Za `formapoint.online` zadržite Zoho MX dok se zasebno ne odobri prelazak cijele domene.
+
+Native adresa ne može se naknadno preimenovati niti pretvoriti u zajednički
+sandučić kroz obrazac. Dodjela drugom korisniku odbija se i na serverskoj ruti.
+
 ### Status provjera i aktivacija
 
-Provedeno lokalno: **8/8 native integracijskih testova**, **8/8 postojećih
+Provedeno lokalno: **12/12 native integracijskih testova** (uključujući dodatnog
+vlasnika, uključivanje kroz administraciju i izolaciju dva osobna sandučića),
+**4/4 Worker provjere** i **8/8 postojećih
 regresijskih testova**, `npm run build` (TypeScript i Vite) i Worker
 `wrangler deploy --dry-run`. Build ima upozorenje postojeće lucide-react
 biblioteke o direktivi use client. U pregledniku je otvorena prijavna stranica;
@@ -195,11 +218,12 @@ prikaz nakon prijave i odgovor provjereni su na razini API-ja, ne kroz pregledni
 
 Lokalna provjera koristi pravi PostgreSQL, postojeću prijavu i Express API te
 simulirani Mailjet; ne dokazuje Cloudflareovu SMTP dostavu ili Gmail isporuku.
-Produkcijska proba čeka: pristup Vercelu/DB i migraciju, postojeću dodjelu demo
-sandučića, zajednički inbound secret, verificirani Mailjet sender i API ključeve,
-izravnu HTTPS dostavu stvarnog MIME-a, odgovor na Gmail i pregled SPF/DKIM/DMARC.
-Cloudflare SMTP → Worker → WebmailHR stvarnom porukom čeka i zasebno odobren
-MX prijelaz. Rezultate lokalnih i produkcijskih provjera vodite odvojeno.
+Produkcijska proba 20. 11. 2026.: korisnik je potvrdio Gmail → Cloudflare → Worker
+→ WebmailHR za `demo@skolehr.xyz`, preuzimanje privitka i odgovor preko Mailjeta
+na Gmail. Izravna HTTPS proba potvrdila je spremanje i deduplikaciju. Worker
+koristi `redirect:'manual'`: workerd ne podržava `redirect:'error'`.
+Aktivacija i stvarna Gmail proba dodatnih sandučića, uključujući Viktora, ostaju
+zasebne provjere. `formapoint.online` zadržava Zoho MX do zasebnog odobrenja.
 
 ## Lokalno pokretanje
 

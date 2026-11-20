@@ -36,11 +36,12 @@ export function Admin({session}:{session:Session}){
   const [kind,setKind]=useState<AccountKind>('staff');
   const [pin,setPin]=useState<string>(),[rotating,setRotating]=useState(false);
   const [editPassword,setEditPassword]=useState(''),[passwordVisible,setPasswordVisible]=useState(false);
+  const [nativeBusy,setNativeBusy]=useState(false),[notice,setNotice]=useState('');
   const config=sections[section],fields:Field[]=config.fields;
   async function load(){try{setRows(await api<RecordRow[]>('/admin/'+section));}catch(e){setError(toError(e));}}
   useEffect(()=>{let alive=true;setRows([]);setError('');api<RecordRow[]>('/admin/'+section).then(x=>{if(alive)setRows(x);}).catch(e=>{if(alive)setError(toError(e));});return ()=>{alive=false;};},[section]);
   useEffect(()=>{api<RecordRow[]>('/admin/organizations').then(setOrgs).catch(()=>{});api<RecordRow[]>('/admin/schools').then(setSchools).catch(()=>{});},[section]);
-  function open(key:Section){setSection(key);setEdit(undefined);setAccess(undefined);setSearch('');setFilter('');history.replaceState(null,'',key==='senders'?'/admin/automatsko-slanje':'/admin');}
+  function open(key:Section){setSection(key);setEdit(undefined);setAccess(undefined);setSearch('');setFilter('');setNotice('');history.replaceState(null,'',key==='senders'?'/admin/automatsko-slanje':'/admin');}
   function begin(row:RecordRow={}){setEditPassword('');setPasswordVisible(false);setKind((row.auth_kind as AccountKind|undefined)??'staff');setEdit(row);setOrg(String(row.org??filter??''));setError('');}
   async function save(e:FormEvent<HTMLFormElement>){
     e.preventDefault();setError('');
@@ -92,6 +93,15 @@ export function Admin({session}:{session:Session}){
     try{await api('/admin/storage/'+id+'/apply','POST');await loadStorage();}
     catch(e){setError(toError(e));}finally{setStorageBusy(false);}
   }
+  async function enableNative(){
+    if(!edit?.id)return;
+    setNativeBusy(true);setError('');setNotice('');
+    try{
+      await api('/admin/mailboxes/'+edit.id+'/native','POST');
+      setEdit(undefined);setStorage(undefined);await load();
+      setNotice('Sandučić koristi Cloudflare / Mailjet. Za primitak dodajte adresu u Worker i pravilo Email Routing.');
+    }catch(e){setError(toError(e));}finally{setNativeBusy(false);}
+  }
   const filtered=rows.filter(row=>(!filter||String(row.org)===filter)&&Object.values(row).some(x=>String(x).toLowerCase().includes(search.toLowerCase())));
   const visible=fields.filter(x=>!['password','recovery','source_user_id','source_email'].includes(x.key));
   const display=(value:RecordRow[string],field:Field)=>{
@@ -108,8 +118,9 @@ export function Admin({session}:{session:Session}){
     {section==='mailboxes'&&<div className="storage-admin"><p className="muted">Stvarna kvota i usmjeravanje aliasa ovise o poštanskom poslužitelju.</p><button className="secondary" disabled={storageBusy} onClick={loadStorage}>{storageBusy?'Dohvaćanje…':'Osvježi stanje pohrane'}</button></div>}
     {section==='mailboxes'&&storage&&<p className="storage-summary">Kapacitet: {storageSize(storage.capacity)} · Prijavljena potrošnja: {storageSize(storage.boxes.reduce((sum,x)=>sum+(x.used??0),0))} · Ciljane kvote: {storage.boxes.reduce((sum,x)=>sum+x.target,0)} GiB · Izmjerena kvota: {storage.boxes.filter(x=>x.limit!=null).length}/{storage.boxes.length} sandučića</p>}
     {error&&!edit&&<p className="error">{error}</p>}
-    <div className="table-wrap"><table><thead><tr>{visible.map(f=><th key={f.key}>{f.label}</th>)}{'org' in (rows[0]??{})&&<th>Organizacija</th>}{section==='mailboxes'&&storage&&<th>Potrošnja / stvarna kvota</th>}{section!=='logs'&&<th>Radnje</th>}</tr></thead><tbody>
-    {filtered.map(row=><tr key={String(row.id??row.name)}>{visible.map(f=><td key={f.key}>{display(row[f.key],f)}</td>)}{'org' in row&&<td>{orgs.find(x=>x.id===row.org)?.name||row.org}</td>}{section==='mailboxes'&&storage&&<td>{storageSize(storage.boxes.find(x=>x.address===row.address)?.used??null)} / {storageSize(storage.boxes.find(x=>x.address===row.address)?.limit??null)}</td>}{section!=='logs'&&<td><div className="actions">{(section!=='organizations'||root)&&<button className="icon secondary" title="Uredi" onClick={()=>begin(row)}><Pencil size={16}/></button>}{section==='users'&&['staff','formapoint'].includes(String(row.auth_kind))&&(root||row.role==='user')&&<button className="secondary" disabled={rotating} onClick={()=>rotatePin(row)}><KeyRound size={16}/> Generiraj / resetiraj lozinku</button>}{section==='mailboxes'&&<button className="icon secondary" title="Ovlasti i aliasi" onClick={()=>setAccess(row)}><KeyRound size={16}/></button>}{section==='mailboxes'&&storage?.canApply&&row.active&&<button className="secondary" disabled={storageBusy} onClick={()=>applyStorage(row.id)}>Primijeni kvotu</button>}</div></td>}</tr>)}
+    {notice&&!edit&&<p className="notice" role="status">{notice}</p>}
+    <div className="table-wrap"><table><thead><tr>{visible.map(f=><th key={f.key}>{f.label}</th>)}{section==='mailboxes'&&<th>Poštanski servis</th>}{'org' in (rows[0]??{})&&<th>Organizacija</th>}{section==='mailboxes'&&storage&&<th>Potrošnja / stvarna kvota</th>}{section!=='logs'&&<th>Radnje</th>}</tr></thead><tbody>
+    {filtered.map(row=><tr key={String(row.id??row.name)}>{visible.map(f=><td key={f.key}>{section==='mailboxes'&&row.storage_kind==='native'&&f.key==='target_quota_gb'?'Serverska kvota':display(row[f.key],f)}</td>)}{section==='mailboxes'&&<td>{row.storage_kind==='native'?'Cloudflare / Mailjet':'IMAP / SMTP'}</td>}{'org' in row&&<td>{orgs.find(x=>x.id===row.org)?.name||row.org}</td>}{section==='mailboxes'&&storage&&<td>{storageSize(storage.boxes.find(x=>x.address===row.address)?.used??null)} / {storageSize(storage.boxes.find(x=>x.address===row.address)?.limit??null)}</td>}{section!=='logs'&&<td><div className="actions">{(section!=='organizations'||root)&&<button className="icon secondary" title="Uredi" onClick={()=>begin(row)}><Pencil size={16}/></button>}{section==='users'&&['staff','formapoint'].includes(String(row.auth_kind))&&(root||row.role==='user')&&<button className="secondary" disabled={rotating} onClick={()=>rotatePin(row)}><KeyRound size={16}/> Generiraj / resetiraj lozinku</button>}{section==='mailboxes'&&<button className="icon secondary" title="Ovlasti i aliasi" onClick={()=>setAccess(row)}><KeyRound size={16}/></button>}{section==='mailboxes'&&storage?.canApply&&row.active&&row.storage_kind!=='native'&&<button className="secondary" disabled={storageBusy} onClick={()=>applyStorage(row.id)}>Primijeni kvotu</button>}</div></td>}</tr>)}
     </tbody></table>{!filtered.length&&<p className="empty compact">Nema zapisa za prikaz.</p>}</div>
     {edit&&<div className="modal-backdrop"><section className="modal" role="dialog" aria-modal="true" aria-label="Uredi zapis"><div className="reader-heading"><h2>{edit.id||edit.name?'Uredi zapis':'Novi zapis'}</h2><button className="icon secondary" aria-label="Zatvori" onClick={()=>setEdit(undefined)}><X size={18}/></button></div><form onSubmit={save}>
       {root&&section!=='organizations'&&<label>Organizacija<select required value={org} onChange={e=>setOrg(e.target.value)} disabled={!!edit.org}><option value="">Odaberite organizaciju</option>{orgs.map(x=><option key={String(x.id)} value={String(x.id)}>{x.name}</option>)}</select></label>}
@@ -122,7 +133,7 @@ export function Admin({session}:{session:Session}){
         if(f.options)return <label key={f.key}>{f.label}<select name={f.key} defaultValue={String(value??f.options[0][0])}>{f.options.filter(x=>root||f.key!=='role'||x[0]==='user').map(([key,label])=><option key={key} value={key}>{label}</option>)}</select></label>;
         return <label key={f.key}>{f.label}<input name={f.key} type={f.type||'text'} defaultValue={String(value??(f.key==='target_quota_gb'?15:''))} required={f.key==='source_user_id'?kind==='ednevnik':f.key==='source_email'?false:!f.optional} minLength={f.key==='password'?8:undefined}/></label>;
       })}{error&&<p className="error">{error}</p>}<button className="primary">Spremi</button>
-    </form></section></div>}
+    </form>{section==='mailboxes'&&edit.id&&<section aria-label="Poštanski servis"><h3>Poštanski servis</h3>{edit.storage_kind==='native'?<p>Cloudflare / Mailjet. Stvarnu kvotu provjerite putem stanja pohrane.</p>:<><p>IMAP / SMTP</p>{root&&<><p>Uključite Cloudflare / Mailjet za spremljeni aktivni osobni sandučić s jednim vlasnikom iste e-mail adrese. Postojeće poruke s IMAP poslužitelja ne prenose se. Kvotu određuju serverske postavke pohrane.</p><button className="secondary" disabled={nativeBusy} onClick={enableNative}>{nativeBusy?'Uključivanje…':'Uključi Cloudflare / Mailjet'}</button></>}</>}</section>}</section></div>}
     {pin!==undefined&&<div className="modal-backdrop"><section className="modal" role="dialog" aria-modal="true" aria-labelledby="assigned-password-title"><div className="reader-heading"><h2 id="assigned-password-title">Nova lozinka za WebmailHR</h2></div><p>Lozinka se prikazuje samo sada. Predajte je korisniku sigurnim kanalom.</p><output className="assigned-password">{pin}</output><button className="primary" onClick={()=>setPin(undefined)}>Zatvori</button></section></div>}
     {access&&<Permissions box={access} close={()=>setAccess(undefined)}/>}
   </section></main>;

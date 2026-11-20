@@ -6,6 +6,7 @@ import {z} from 'zod';
 import {db,digest,hashPassword,transaction,verifyPassword} from './db.js';
 import {addressing,applyMailcowQuota,demo,HttpError,quotaFor} from './mail.js';
 import {deny,email,id,text,user} from './http.js';
+import {enabledNativeAddress} from './inbound.js';
 
 async function directoryInstalled(client:PoolClient){
   const {rows:[state]}=await client.query("select to_regclass('directory_mailboxes') is not null as installed");
@@ -21,7 +22,7 @@ const tables={
   schools:{columns:'id,org,name',scope:'org',schema:z.object({name:text})},
   domains:{columns:'name,org,inbound,outbound',scope:'org',schema:z.object({name:z.string().toLowerCase().regex(/^(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z0-9-]+$/).max(253),inbound:z.boolean(),outbound:z.boolean()})},
   users:{columns:'id,org,school,name,email,role,active,recovery,auth_kind,source_project,source_user_id,source_email',scope:'org',schema:z.object({name:text,email,school:id.nullable(),role:z.enum(['root','admin','user']),active:z.boolean(),recovery:email.nullable(),auth_kind:authKind.optional(),source_user_id:sourceId.nullable().optional(),source_email:email.nullable().optional(),password:z.string().min(8).max(512).optional()})},
-  mailboxes:{columns:'id,org,address,label,shared,active,target_quota_gb',scope:'org',schema:z.object({address:email,label:text,shared:z.boolean(),active:z.boolean(),target_quota_gb:z.number().int().min(1).max(10000)})},
+  mailboxes:{columns:'id,org,address,label,shared,active,target_quota_gb,storage_kind',scope:'org',schema:z.object({address:email,label:text,shared:z.boolean(),active:z.boolean(),target_quota_gb:z.number().int().min(1).max(10000)})},
   senders:{columns:'id,org,address,reply_to,kind,active',scope:'org',schema:z.object({address:email,reply_to:email,kind:z.enum(['order','promotion']),active:z.boolean()})},
 };
 const tableName=z.enum(['organizations','schools','domains','users','mailboxes','senders']);
@@ -74,6 +75,35 @@ export function setupData(api:Router){
     res.json({ok:true});
   });
   api.use('/admin',(req,_res,next)=>{if(user(req).role==='user') deny();next();});
+  api.post('/admin/mailboxes/:box/native',async(req,res)=>{
+    const a=user(req);if(a.role!=='root')return deny();
+    const box=id.parse(req.params.box);
+    await transaction(async c=>{
+      const {rows:[m]}=await c.query('select * from mailboxes where id=$1 for update',[box]);
+      if(!m)return deny();
+      if(!m.active||m.shared)throw new HttpError(409,'Potreban je aktivni osobni sandučić.');
+      if(!enabledNativeAddress(m.address))throw new HttpError(409,'Prvo omogućite adresu u serverskoj postavci NATIVE_ENABLED_ADDRESSES.');
+      if(!process.env.MAILJET_API_KEY||!process.env.MAILJET_SECRET_KEY||!process.env.CLOUDFLARE_INBOUND_SECRET||process.env.CLOUDFLARE_INBOUND_SECRET.trim().length<32){
+        throw new HttpError(503,'Prvo konfigurirajte Mailjet i zaštitni ključ za primitak pošte.');
+      }
+      const domain=await c.query('select 1 from domains where org=$1 and name=$2 and inbound and outbound',[m.org,addressing(m.address)]);
+      if(!domain.rowCount)throw new HttpError(409,'Domena organizacije mora imati omogućen primitak i slanje.');
+      if(await directoryInstalled(c)){
+        const managed=await c.query('select 1 from directory_mailboxes where box=$1',[box]);
+        if(managed.rowCount)throw new HttpError(409,'Sinkronizirani IMAP sandučić nije moguće prebaciti ovim postupkom.');
+      }
+      const {rows:grants}=await c.query(`select g.uid,g.can_send,u.email,u.org,u.active from grants g
+        join users u on u.id=g.uid where g.box=$1 for share of u`,[box]);
+      if(grants.length!==1||!grants[0].active||!grants[0].can_send||grants[0].org!==m.org||grants[0].email!==m.address){
+        throw new HttpError(409,'U ovlastima dodijelite sandučić samo aktivnom vlasniku s istom e-mail adresom i ovlasti slanja.');
+      }
+      if(m.storage_kind!=='native'){
+        await c.query("update mailboxes set storage_kind='native' where id=$1",[box]);
+        await c.query('insert into audits(uid,action,target) values($1,$2,$3)',[a.id,'mailbox.native.enable',String(box)]);
+      }
+    });
+    res.json({ok:true});
+  });
   api.post('/admin/storage/:box/apply',async(req,res)=>{
     const a=user(req), box=id.parse(req.params.box);
     await transaction(async c=>{
@@ -115,9 +145,13 @@ export function setupData(api:Router){
       z.object({kind:z.literal('alias'),address:email,remove:z.boolean(),send_as:z.boolean()})
     ]).parse(req.body);
     await transaction(async c=>{
-      const {rows:[m]}=await c.query('select org from mailboxes where id=$1 for update',[box]);
+      const {rows:[m]}=await c.query('select org,address,storage_kind from mailboxes where id=$1 for update',[box]);
       if(!m || (a.role!=='root' && m.org!==a.org)) deny();
       if(x.kind==='grant'){
+        if(!x.remove&&m.storage_kind==='native'){
+          const owner=await c.query('select 1 from users where id=$1 and org=$2 and email=$3 and active',[x.uid,m.org,m.address]);
+          if(!owner.rowCount)throw new HttpError(409,'Osobni Cloudflare sandučić može se dodijeliti samo aktivnom vlasniku iste e-mail adrese.');
+        }
         if(!x.remove && await directoryInstalled(c)){
           const {rows:[owner]}=await c.query('select uid from directory_mailboxes where box=$1',[box]);
           if(owner && owner.uid!==x.uid)throw new HttpError(409,'Osobni sandučić može se dodijeliti samo vlasniku.');
@@ -198,6 +232,9 @@ export function setupData(api:Router){
         const result=await c.query(`select * from ${name} where ${identity}=$1 for update`,[requested]);
         current=result.rows[0];
         if(!current || (name!=='organizations' && current.org!==org) || (name==='users' && a.role!=='root' && current.role!=='user')) deny();
+        if(name==='mailboxes'&&current.storage_kind==='native'&&(current.address!==input.address||input.shared)){
+          throw new HttpError(409,'Adresa osobnog Cloudflare sandučića ne može se mijenjati niti pretvoriti u zajednički sandučić.');
+        }
         if(name==='mailboxes' && (current.address!==input.address || current.shared!==input.shared) && await directoryInstalled(c)){
           const managed=await c.query('select 1 from directory_mailboxes where box=$1',[requested]);
           if(managed.rowCount)throw new HttpError(409,'Adresu i vrstu sinkroniziranog osobnog sandučića nije moguće promijeniti.');
