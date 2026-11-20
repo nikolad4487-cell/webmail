@@ -79,7 +79,9 @@ export function personAddress(source:DirectorySource,domain:string,sourceEmail:s
     if(!['skolehr.xyz','eskole.me'].includes(origin) || reserved.has(local) || !/^[a-z0-9][a-z0-9._-]{0,63}$/.test(local))return;
     return local+'@'+domain;
   }
-  if(origin===domain && !reserved.has(local) && /^[a-z0-9][a-z0-9._-]{0,63}$/.test(local))return sourceEmail;
+  // FormaPoint has already verified ownership of this source email. Its local part
+  // does not confer administrator privileges; collision checks protect existing mailboxes.
+  if(origin===domain && /^[a-z0-9][a-z0-9._-]{0,63}$/.test(local))return sourceEmail;
   const prefix=local.replace(/[^a-z0-9]+/g,'.').replace(/^\.|\.$/g,'').slice(0,40)||'korisnik';
   const suffix=createHash('sha256').update(subject).digest('hex').slice(0,16);
   return `${prefix}.${suffix}@${domain}`;

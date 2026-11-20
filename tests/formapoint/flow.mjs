@@ -96,3 +96,39 @@ test('Source-linked login verifies the original source identity and grants only 
     const wrong=await fetch(base+'/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({identifier:p.email,password:'source-password'})});assert.equal(wrong.status,401);
   }finally{globalThis.fetch=originalFetch;}
 });
+
+test('Verified own-domain names are kept verbatim and never grant administrator roles',async()=>{
+  const {personAddress}=await import('../../server/directory-source.ts');
+  assert.equal(personAddress('formapoint','formapoint.online','admin@formapoint.online',randomUUID()),'admin@formapoint.online');
+  assert.equal(personAddress('ednevnik','skolehr.xyz','admin@skolehr.xyz',randomUUID()),undefined);
+  const p=person('webmaster@formapoint.online');
+  const r=(await sync([p])).results[0];assert.equal(r.address,p.email);
+  assert.equal((await db.query('select role from users where source_user_id=$1',[p.id])).rows[0].role,'user');
+});
+test('Original-address repair refuses collisions and preserves account, password, mailbox IDs, messages, attachments and grants',async()=>{
+  const previous='admin.7b806f4df0c35d76@formapoint.online',original='admin@formapoint.online';
+  const hash=await (await import('../../server/db.ts')).hashPassword('preserved-password');
+  const u=(await db.query(`insert into users(org,email,name,password,auth_kind,source_project,source_user_id,source_email)
+    values($1,$2,'Personal user',$3,'formapoint','heseilggogbtmqeuwlku',$4,$5) returning *`,[org,previous,hash,randomUUID(),original])).rows[0];
+  const b=(await db.query("insert into mailboxes(org,address,label,storage_kind) values($1,$2,'Existing personal mailbox','native') returning *",[org,previous])).rows[0];
+  await db.query('insert into grants values($1,$2,true,true)',[u.id,b.id]);
+  await db.query("insert into sessions values('repair-session',$1,now()+interval '1 hour')",[u.id]);
+  const {storeNative}=await import('../../server/native-mail.ts'),{mime}=await import('../../server/mail.ts');
+  const raw=await mime({from:'sender@example.test',to:[previous],subject:'Preserved mail',text:'Existing mail',attachments:[{filename:'kept.txt',content:Buffer.from('preserved attachment')}]});
+  const saved=await storeNative(previous,'INBOX',raw,{from:'sender@example.test'});
+  const sql=await readFile(new URL('../../migrations/004-formapoint-original-address.sql',import.meta.url),'utf8');
+  const occupied=(await db.query("insert into mailboxes(org,address,label) values($1,$2,'Occupied') returning id",[org,original])).rows[0];
+  await assert.rejects(db.query(sql),/already assigned/);
+  assert.equal((await db.query('select email from users where id=$1',[u.id])).rows[0].email,previous);
+  await db.query('delete from mailboxes where id=$1',[occupied.id]);
+  await db.query(sql);await db.query(sql);
+  const afterUser=(await db.query('select * from users where id=$1',[u.id])).rows[0];
+  assert.deepEqual(afterUser,{...u,email:original});
+  assert.deepEqual((await db.query('select * from mailboxes where id=$1',[b.id])).rows[0],{...b,address:original});
+  assert.deepEqual((await db.query('select * from grants where box=$1',[b.id])).rows,[{uid:u.id,box:b.id,can_send:true,can_calendar:true}]);
+  assert.equal((await db.query('select box from native_messages where id=$1',[saved.id])).rows[0].box,b.id);
+  assert.equal((await db.query('select raw from native_messages where id=$1',[saved.id])).rows[0].raw.compare(raw),0);
+  assert.equal((await db.query('select content from native_attachments where message=$1',[saved.id])).rows[0].content.toString(),'preserved attachment');
+  assert.equal((await db.query('select count(*)::int n from sessions where uid=$1',[u.id])).rows[0].n,0);
+  assert.equal((await db.query("select count(*)::int n from audits where uid=$1 and action='formapoint.address.correct'",[u.id])).rows[0].n,1);
+});

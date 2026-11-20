@@ -267,7 +267,8 @@ postojeće potvrđene korisnike u serijama po 10; slijedite `nextPage` do `null`
 Anonimni, nepotvrđeni i zabranjeni računi preskaču se. Ovi servisni pozivi nisu
 pristupačni običnoj korisničkoj sesiji ili pregledniku.
 
-Adresa s vlastite domene ostaje ista ako nije rezervirana. Za vanjski prijavni e-mail
+Potvrđena adresa s vlastite domene ostaje ista, uključujući `admin@formapoint.online`;
+naziv adrese ne dodjeljuje administratorsku ulogu. Zauzete adrese i aliasi se ne preuzimaju. Za vanjski prijavni e-mail
 stvara se stabilna adresa `lokalni-dio.<16 hex znakova identiteta>@formapoint.online`.
 Povezani korisnik zadržava adresu i nakon promjene prijavnog e-maila. U početku se
 prijavljuje FormaPoint podacima uz provjeru izvornog UUID-a. Postojeća neovisna
@@ -278,7 +279,7 @@ postojeći IMAP sandučić vraća `needs_activation` i ne pretvara se automatski
 
 Lokalno se koriste prazne PostgreSQL baze i simulirana vanjska autentikacija/slanje:
 12 native testova, 10 testova skupnog i automatskog stvaranja (uključujući treću
-domenu), 8 testova FormaPoint povezivanja, 6 testova lozinki, 5 testova migracija
+domenu), 10 testova FormaPoint povezivanja, 6 testova lozinki, 5 testova migracija
 i 5 Worker testova. `npm run build` provjerava TypeScript i Vite.
 `TEST_FORMAPOINT_DATABASE_URL=postgresql://USER:PASSWORD@127.0.0.1:5432/DISPOSABLE_DB npm run test:formapoint`.
 FormaPoint ima zasebne testove vlastite serverske rute.
@@ -546,3 +547,12 @@ Klijentska aplikacija za narudžbe i kampanje vodi raspored, primatelje i privol
 Redovito radite šifrirani `pg_dump --format=custom --file=webmail.dump "$DATABASE_URL"` i snimku volumena poštanskog poslužitelja (poruke, korisnici, kvote, aliasi, ključevi). Sačuvajte verziju aplikacije, popis DNS zapisa i odvojenu kopiju serverskih tajni prema proceduri pružatelja. Vratite dump u novu praznu bazu koristeći `pg_restore --exit-on-error --no-owner --dbname="$RESTORE_DATABASE_URL" webmail.dump`, vratite korespondirajuće mail volumene prema uputama servisa i u izoliranoj mreži provjerite prijavu, kvotu, privitke i probno slanje prije prebacivanja prometa. Pri vraćanju identiteta i sesija nakon incidenta poništite postojeće sesije i tokene oporavka te rotirajte tajne.
 
 Dolazna poruka prikazuje se kao tekst, a MIME privitci se preuzimaju kao datoteke. Pretraga i mape rade na IMAP-u. Niti se grupiraju prema zaglavljima Message-ID i In-Reply-To unutar trenutačno učitanih poruka. Pozivnice se mogu preuzeti kao .ics. Označavanje dostave traži stvarno povezani servis.
+
+### Ispravak prve uvezene FormaPoint adrese
+
+Migracija `004-formapoint-original-address.sql` vraća `admin@formapoint.online`
+umjesto nastavka dodijeljenog pri prvom uvozu. Obuhvaća samo točno povezani
+potvrđeni izvorni račun i njegov osobni native sandučić. Provjerava kolizije i
+vlasništvo, zadržava iste ID-eve računa i sandučića te lozinku, poruke, privitke i
+dodjele. Račun ostaje u ulozi `user`; stare sesije opozivaju se. Ponovna primjena
+ne stvara dodatne zapise. Serverska provjera pri migraciji potvrđuje rezultat.
