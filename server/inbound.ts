@@ -7,7 +7,6 @@ import {usesNativeDomain} from './mailbox-provisioning.js';
 import type {PoolClient} from 'pg';
 
 export async function enabledNativeAddress(address:string,client:Pick<PoolClient,'query'>=db){
-  if(!['skolehr.xyz','formapoint.online'].includes(address.split('@')[1]))return false;
   return (process.env.NATIVE_ENABLED_ADDRESSES||'demo@skolehr.xyz').split(',').map(x=>x.trim().toLowerCase()).includes(address)
     || await usesNativeDomain(client,address);
 }

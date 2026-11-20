@@ -1,7 +1,6 @@
 import type {PoolClient} from 'pg';
 import {HttpError,addressing} from './mail.js';
 
-export const nativeDomains=['skolehr.xyz','formapoint.online'];
 export function requireNativeSetup(){
   if(!process.env.MAILJET_API_KEY?.trim()||!process.env.MAILJET_SECRET_KEY?.trim()||
     (process.env.CLOUDFLARE_INBOUND_SECRET?.trim().length??0)<32){
@@ -10,7 +9,6 @@ export function requireNativeSetup(){
 }
 export async function usesNativeDomain(c:Pick<PoolClient,'query'>,address:string,org?:number){
   const domain=addressing(address);
-  if(!nativeDomains.includes(domain))return false;
   const result=await c.query(`select 1 from domains where name=$1 and ($2::int is null or org=$2)
     and mailbox_backend='native' and inbound and outbound`,[domain,org??null]);
   return !!result.rowCount;
@@ -30,12 +28,12 @@ export async function provisionCandidates(c:Pick<PoolClient,'query'>,org:number|
   const {rows}=await c.query(`select u.id,u.org,u.email,u.name from users u
     join domains d on d.org=u.org and d.name=split_part(u.email,'@',2)
     where ($1::int is null or u.org=$1) and u.active and u.role<>'root'
-      and d.mailbox_backend='native' and d.inbound and d.outbound and d.name=any($2::text[])
+      and d.mailbox_backend='native' and d.inbound and d.outbound
       and not exists(select 1 from mailboxes m where m.address=u.email)
       and not exists(select 1 from aliases a where a.address=u.email)
       and not exists(select 1 from senders s where s.address=u.email)
       and not exists(select 1 from directory_identities i where i.uid=u.id)
-    order by u.id limit 101`,[org,nativeDomains]);
+    order by u.id limit 101`,[org]);
   return {users:rows.slice(0,100),hasMore:rows.length>100};
 }
 export async function provisionUserMailbox(c:PoolClient,uid:number,org:number|null,actor:number){

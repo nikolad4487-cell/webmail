@@ -1,7 +1,7 @@
 import {before,after,test} from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
-import {createHash,randomBytes} from 'node:crypto';
+import {createHash,createHmac,randomBytes} from 'node:crypto';
 import {once} from 'node:events';
 import worker from '../../cloudflare/email-worker.mjs';
 
@@ -139,4 +139,40 @@ test('Preview batches are bounded and advance past existing mailboxes',async()=>
   await request('/admin/mailboxes/provision',{body:{org,uids:ids},status:400});
   assert.equal((await request('/admin/mailboxes/provision',{body:{org,uids:first.users.map(u=>u.id)}})).created,100);
   const last=await request('/admin/mailboxes/provision');assert.equal(last.users.length,1);assert.equal(last.hasMore,false);
+});
+test('A third registered domain supports automatic and bulk mailboxes without code or env changes',async()=>{
+  const name='newschool.example';
+  await request('/admin/domains',{body:{org,name,inbound:true,outbound:true,mailbox_backend:'native'}});
+  const first=await createUser('first@'+name),second=await createUser('second@'+name);
+  await request('/admin/mailboxes',{body:boxInput(first.email)});
+  const firstBox=(await db.query('select id,storage_kind from mailboxes where address=$1',[first.email])).rows[0];
+  assert.equal(firstBox.storage_kind,'native');
+  assert.ok((await request('/admin/mailboxes/provision?org='+org)).users.some(u=>u.id===second.id));
+  assert.equal((await request('/admin/mailboxes/provision',{body:{org,uids:[second.id]}})).created,1);
+  const {mime}=await import('../../server/mail.ts');
+  const raw=await mime({from:'sender@example.test',to:[first.email],subject:'Third domain',text:'Registered domain only'});
+  const originalFetch=globalThis.fetch;
+  globalThis.fetch=async(url,options)=>{assert.equal(url,'https://webmailhr.com/api/inbound/cloudflare');return originalFetch(base+'/api/inbound/cloudflare',options);};
+  try{
+    let rejected;
+    await worker.email({from:'sender@example.test',to:first.email,rawSize:raw.length,raw:new Blob([raw]).stream(),setReject:r=>{rejected=r;}},{INBOUND_URL:'https://webmailhr.com/api/inbound/cloudflare',INBOUND_SECRET:process.env.CLOUDFLARE_INBOUND_SECRET,ENABLED_RECIPIENTS:'*'});
+    assert.equal(rejected,undefined);
+  }finally{globalThis.fetch=originalFetch;}
+  assert.equal((await request('/mail/'+firstBox.id,{session:userCookies.get(first.id)}))[0].subject,'Third domain');
+  await request('/mail/'+firstBox.id,{session:userCookies.get(second.id),status:403});
+});
+test('Universal routing rejects unregistered and non-native domains even with a valid delivery signature',async()=>{
+  async function deliverTo(to){
+    const raw=Buffer.from('From: sender@example.test\r\n\r\nMust not be stored');
+    const timestamp=String(Date.now()),sender='sender@example.test',hash=createHash('sha256').update(raw).digest('hex');
+    const signature=createHmac('sha256',process.env.CLOUDFLARE_INBOUND_SECRET).update([timestamp,sender,to,hash].join('\n')).digest('hex');
+    return fetch(base+'/api/inbound/cloudflare',{method:'POST',headers:{'Content-Type':'message/rfc822','x-webmail-timestamp':timestamp,'x-webmail-from':sender,'x-webmail-to':to,'x-webmail-sha256':hash,'x-webmail-signature':signature},body:raw});
+  }
+  assert.equal((await deliverTo('unknown@unregistered.example')).status,403);
+  assert.equal((await deliverTo('zoho@formapoint.online')).status,403);
+  assert.equal((await deliverTo('unknown@newschool.example')).status,404);
+  await db.query("update domains set inbound=false where name='newschool.example'");
+  assert.equal((await deliverTo('first@newschool.example')).status,403);
+  await db.query("update domains set inbound=true where name='newschool.example'");
+  assert.equal((await db.query("select count(*)::int n from mailboxes where address='unknown@unregistered.example'")).rows[0].n,0);
 });

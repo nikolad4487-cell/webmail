@@ -9,6 +9,7 @@ import {addressing,append,archiveDraft,demo,folder,HttpError,imap,listing,messag
 import {email,id,user,deny} from './http.js';
 import {setupData} from './workspace.js';
 import {setupAutomation} from './automation.js';
+import {setupFormaPointMailboxes} from './formapoint-mailboxes.js';
 
 const app=express(), api=express.Router(), production=process.env.NODE_ENV==='production';
 const configuredPublicOrigin=process.env.APP_ORIGIN?.trim() || (production?'https://webmailhr.com':'');
@@ -40,6 +41,7 @@ app.use((_req,res,next)=>{
   next();
 });
 setupInbound(app,host=>publicHosts.has(host)||(!production&&!origin&&host.startsWith('127.0.0.1:')));
+setupFormaPointMailboxes(app,host=>publicHosts.has(host)||(!production&&!origin&&host.startsWith('127.0.0.1:')));
 app.use('/api',express.json({limit:'17mb'}),(_req,res,next)=>{res.set('Cache-Control','no-store');next();},api);
 api.use((req,_res,next)=>{
   if (!['GET','HEAD','OPTIONS'].includes(req.method) && req.get('origin')) {

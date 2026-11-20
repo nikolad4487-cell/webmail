@@ -22,11 +22,12 @@ test('Configuration errors have fixed codes and do not call HTTPS',async()=>{
     assert.equal(r.calls,0);assert.match(r.rejected,new RegExp(code));
   }
 });
-test('Explicit wildcard supports a catch-all only on supported domains; default stays demo-only',async()=>{
+test('Wildcard works for future domains without a code edit; default remains demo-only',async()=>{
   const success=async()=>Response.json({ok:true,id:1});
   const limited=await run(env,success,'new@skolehr.xyz');assert.equal(limited.calls,0);assert.match(limited.rejected,/Recipient is not enabled/);
   const enabled=await run({...env,ENABLED_RECIPIENTS:'*'},success,'new@skolehr.xyz');assert.equal(enabled.calls,1);assert.equal(enabled.rejected,undefined);
-  const foreign=await run({...env,ENABLED_RECIPIENTS:'*'},success,'new@other.test');assert.equal(foreign.calls,0);assert.match(foreign.rejected,/Recipient is not enabled/);
+  const future=await run({...env,ENABLED_RECIPIENTS:'*'},success,'new@other.test');assert.equal(future.calls,1);assert.equal(future.rejected,undefined);
+  const invalid=await run({...env,ENABLED_RECIPIENTS:'*'},success,'invalid recipient');assert.equal(invalid.calls,0);assert.match(invalid.rejected,/Recipient is not enabled/);
 });
 test('Copied outer whitespace is removed; MIME signature and destination remain exact',async()=>{
   const r=await run({INBOUND_SECRET:' '+secret+'\n',INBOUND_URL:env.INBOUND_URL+'\n'},async(url,options)=>{

@@ -7,7 +7,7 @@ import {db,digest,hashPassword,transaction,verifyPassword} from './db.js';
 import {addressing,applyMailcowQuota,demo,HttpError,quotaFor} from './mail.js';
 import {deny,email,id,text,user} from './http.js';
 import {enabledNativeAddress} from './inbound.js';
-import {attachPersonalOwner,nativeDomains,provisionCandidates,provisionUserMailbox,requireNativeSetup,usesNativeDomain} from './mailbox-provisioning.js';
+import {attachPersonalOwner,provisionCandidates,provisionUserMailbox,requireNativeSetup,usesNativeDomain} from './mailbox-provisioning.js';
 
 async function directoryInstalled(client:PoolClient){
   const {rows:[state]}=await client.query("select to_regclass('directory_mailboxes') is not null as installed");
@@ -273,7 +273,6 @@ export function setupData(api:Router){
         input.mailbox_backend=input.mailbox_backend??current?.mailbox_backend??'imap';
         if(a.role!=='root'&&input.mailbox_backend!==(current?.mailbox_backend??'imap'))return deny();
         if(input.mailbox_backend==='native'){
-          if(!nativeDomains.includes(String(input.name)))throw new HttpError(400,'Cloudflare / Mailjet podržan je za skolehr.xyz i formapoint.online.');
           requireNativeSetup();
         }
       }
