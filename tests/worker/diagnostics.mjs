@@ -5,13 +5,13 @@ import worker from '../../cloudflare/email-worker.mjs';
 
 const secret='local-worker-test-key-01234567890123456789';
 const env={INBOUND_SECRET:secret,INBOUND_URL:'https://webmailhr.com/api/inbound/cloudflare'};
-async function run(settings,fetcher){
+async function run(settings,fetcher,to='demo@skolehr.xyz'){
   const previousFetch=globalThis.fetch,previousError=console.error,logs=[];
   let rejected,calls=0;
   globalThis.fetch=async(...args)=>{calls++;return fetcher(...args);};
   console.error=(...args)=>logs.push(args);
   try{
-    await worker.email({from:'sender@example.test',to:'demo@skolehr.xyz',rawSize:4,
+    await worker.email({from:'sender@example.test',to,rawSize:4,
       raw:new Blob(['test']).stream(),setReject:value=>{rejected=value;}},settings);
     return {rejected,calls,logs};
   }finally{globalThis.fetch=previousFetch;console.error=previousError;}
@@ -21,6 +21,12 @@ test('Configuration errors have fixed codes and do not call HTTPS',async()=>{
     const r=await run(settings,()=>{throw new Error('Should not fetch');});
     assert.equal(r.calls,0);assert.match(r.rejected,new RegExp(code));
   }
+});
+test('Explicit wildcard supports a catch-all only on supported domains; default stays demo-only',async()=>{
+  const success=async()=>Response.json({ok:true,id:1});
+  const limited=await run(env,success,'new@skolehr.xyz');assert.equal(limited.calls,0);assert.match(limited.rejected,/Recipient is not enabled/);
+  const enabled=await run({...env,ENABLED_RECIPIENTS:'*'},success,'new@skolehr.xyz');assert.equal(enabled.calls,1);assert.equal(enabled.rejected,undefined);
+  const foreign=await run({...env,ENABLED_RECIPIENTS:'*'},success,'new@other.test');assert.equal(foreign.calls,0);assert.match(foreign.rejected,/Recipient is not enabled/);
 });
 test('Copied outer whitespace is removed; MIME signature and destination remain exact',async()=>{
   const r=await run({INBOUND_SECRET:' '+secret+'\n',INBOUND_URL:env.INBOUND_URL+'\n'},async(url,options)=>{

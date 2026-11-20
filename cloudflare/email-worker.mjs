@@ -7,7 +7,9 @@ class DeliveryError extends Error {
 async function receive(message,env){
     const allowed=(env.ENABLED_RECIPIENTS||'demo@skolehr.xyz').split(',').map(x=>x.trim().toLowerCase());
     const to=message.to.toLowerCase();
-    if(!allowed.includes(to)||!['skolehr.xyz','formapoint.online'].includes(to.split('@')[1])){
+    // '*' is an explicit one-time opt-in for a catch-all rule. WebmailHR checks its domain
+    // policy and stores only existing active personal native mailboxes; it creates none on receipt.
+    if(!(allowed.includes('*')||allowed.includes(to))||!['skolehr.xyz','formapoint.online'].includes(to.split('@')[1])){
       message.setReject('Recipient is not enabled');return;
     }
     if(message.rawSize>MAX_RAW_BYTES){message.setReject('Message exceeds 3 MB pilot limit');return;}

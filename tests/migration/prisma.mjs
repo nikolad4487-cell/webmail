@@ -28,6 +28,8 @@ test('Prisma-style GRANT/REVOKE restrictions preserve migration and server-only 
     await c.query(native);await c.query(native);
     const passwords=await readFile(new URL('../../migrations/002-mail-passwords.sql',import.meta.url),'utf8');
     await c.query(passwords);await c.query(passwords);
+    const provisioning=await readFile(new URL('../../migrations/003-mailbox-provisioning.sql',import.meta.url),'utf8');
+    await c.query(provisioning);await c.query(provisioning);
     assert.equal((await c.query("select exists(select 1 from information_schema.columns where table_name='users' and column_name='password_scheme') as ok")).rows[0].ok,true);
     await assert.rejects(c.query('revoke all on native_messages from public'),{code:'42501'});
     await c.query(`insert into organizations(id,name) values(1,'Test');

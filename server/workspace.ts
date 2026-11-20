@@ -7,6 +7,7 @@ import {db,digest,hashPassword,transaction,verifyPassword} from './db.js';
 import {addressing,applyMailcowQuota,demo,HttpError,quotaFor} from './mail.js';
 import {deny,email,id,text,user} from './http.js';
 import {enabledNativeAddress} from './inbound.js';
+import {attachPersonalOwner,nativeDomains,provisionCandidates,provisionUserMailbox,requireNativeSetup,usesNativeDomain} from './mailbox-provisioning.js';
 
 async function directoryInstalled(client:PoolClient){
   const {rows:[state]}=await client.query("select to_regclass('directory_mailboxes') is not null as installed");
@@ -20,7 +21,7 @@ const contact=z.object({name:text,email});
 const tables={
   organizations:{columns:'id,name',scope:'id',schema:z.object({name:text})},
   schools:{columns:'id,org,name',scope:'org',schema:z.object({name:text})},
-  domains:{columns:'name,org,inbound,outbound',scope:'org',schema:z.object({name:z.string().toLowerCase().regex(/^(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z0-9-]+$/).max(253),inbound:z.boolean(),outbound:z.boolean()})},
+  domains:{columns:'name,org,inbound,outbound,mailbox_backend',scope:'org',schema:z.object({name:z.string().toLowerCase().regex(/^(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z0-9-]+$/).max(253),inbound:z.boolean(),outbound:z.boolean(),mailbox_backend:z.enum(['imap','native']).optional()})},
   users:{columns:'id,org,school,name,email,role,active,recovery,auth_kind,source_project,source_user_id,source_email',scope:'org',schema:z.object({name:text,email,school:id.nullable(),role:z.enum(['root','admin','user']),active:z.boolean(),recovery:email.nullable(),auth_kind:authKind.optional(),source_user_id:sourceId.nullable().optional(),source_email:email.nullable().optional(),password:z.string().min(8).max(512).optional()})},
   mailboxes:{columns:'id,org,address,label,shared,active,target_quota_gb,storage_kind',scope:'org',schema:z.object({address:email,label:text,shared:z.boolean(),active:z.boolean(),target_quota_gb:z.number().int().min(1).max(10000)})},
   senders:{columns:'id,org,address,reply_to,kind,active',scope:'org',schema:z.object({address:email,reply_to:email,kind:z.enum(['order','promotion']),active:z.boolean()})},
@@ -75,6 +76,29 @@ export function setupData(api:Router){
     res.json({ok:true});
   });
   api.use('/admin',(req,_res,next)=>{if(user(req).role==='user') deny();next();});
+  const provisioningScope=(a:ReturnType<typeof user>,requested:number|null)=>{
+    if(a.role!=='root'&&requested!==null&&requested!==a.org)return deny();
+    return a.role==='root'?requested:a.org;
+  };
+  api.get('/admin/mailboxes/provision',async(req,res)=>{
+    const org=provisioningScope(user(req),req.query.org?id.parse(req.query.org):null);
+    res.json(await provisionCandidates(db,org));
+  });
+  api.post('/admin/mailboxes/provision',async(req,res)=>{
+    const a=user(req),input=z.object({org:id.nullable(),uids:z.array(id).min(1).max(100)}).strict().parse(req.body);
+    const org=provisioningScope(a,input.org),uids=[...new Set(input.uids)].sort((x,y)=>x-y);
+    requireNativeSetup();
+    const created=await transaction(async c=>{
+      if(a.role!=='root'){
+        const allowed=await c.query('select id from users where id=any($1::int[]) and org=$2',[uids,a.org]);
+        if(allowed.rowCount!==uids.length)return deny();
+      }
+      let count=0;
+      for(const uid of uids)if(await provisionUserMailbox(c,uid,org,a.id))count++;
+      return count;
+    });
+    res.json({created,skipped:uids.length-created});
+  });
   api.post('/admin/mailboxes/:box/native',async(req,res)=>{
     const a=user(req);if(a.role!=='root')return deny();
     const box=id.parse(req.params.box);
@@ -82,10 +106,8 @@ export function setupData(api:Router){
       const {rows:[m]}=await c.query('select * from mailboxes where id=$1 for update',[box]);
       if(!m)return deny();
       if(!m.active||m.shared)throw new HttpError(409,'Potreban je aktivni osobni sandučić.');
-      if(!enabledNativeAddress(m.address))throw new HttpError(409,'Prvo omogućite adresu u serverskoj postavci NATIVE_ENABLED_ADDRESSES.');
-      if(!process.env.MAILJET_API_KEY||!process.env.MAILJET_SECRET_KEY||!process.env.CLOUDFLARE_INBOUND_SECRET||process.env.CLOUDFLARE_INBOUND_SECRET.trim().length<32){
-        throw new HttpError(503,'Prvo konfigurirajte Mailjet i zaštitni ključ za primitak pošte.');
-      }
+      if(!await enabledNativeAddress(m.address,c))throw new HttpError(409,'Prvo omogućite Cloudflare / Mailjet za domenu ili adresu u serverskim postavkama.');
+      requireNativeSetup();
       const domain=await c.query('select 1 from domains where org=$1 and name=$2 and inbound and outbound',[m.org,addressing(m.address)]);
       if(!domain.rowCount)throw new HttpError(409,'Domena organizacije mora imati omogućen primitak i slanje.');
       if(await directoryInstalled(c)){
@@ -247,6 +269,14 @@ export function setupData(api:Router){
         }
       }
       let revoke=false;
+      if(name==='domains'){
+        input.mailbox_backend=input.mailbox_backend??current?.mailbox_backend??'imap';
+        if(a.role!=='root'&&input.mailbox_backend!==(current?.mailbox_backend??'imap'))return deny();
+        if(input.mailbox_backend==='native'){
+          if(!nativeDomains.includes(String(input.name)))throw new HttpError(400,'Cloudflare / Mailjet podržan je za skolehr.xyz i formapoint.online.');
+          requireNativeSetup();
+        }
+      }
       if(name==='users'){
         if(input.role!=='user' && a.role!=='root') deny();
         const kind=authKind.parse(input.auth_kind ?? current?.auth_kind ?? 'local');
@@ -311,6 +341,12 @@ export function setupData(api:Router){
         if(conflict.rowCount) throw new HttpError(409,'Adresa se već koristi kao alias.');
       }
       if(name==='senders' && !(await c.query('select 1 from mailboxes where org=$1 and address=$2',[org,input.reply_to])).rowCount) throw new HttpError(400,'Adresa za odgovor mora biti sandučić organizacije.');
+      const createNative=name==='mailboxes'&&requested===null&&!input.shared&&await usesNativeDomain(c,String(input.address),org);
+      if(createNative){
+        requireNativeSetup();
+        if((await c.query('select 1 from senders where address=$1',[input.address])).rowCount)throw new HttpError(409,'Adresa je rezervirana za automatskog pošiljatelja.');
+        input.storage_kind='native';
+      }
       const cols=Object.keys(input), vals=Object.values(input);
       if(requested!==null){
         await c.query(`update ${name} set ${cols.map((col,i)=>`${col}=$${i+1}`).join(',')} where ${identity}=$${vals.length+1}`,[...vals,requested]);
@@ -321,7 +357,8 @@ export function setupData(api:Router){
         }
       }else{
         if(name!=='organizations'){cols.push('org');vals.push(org);}
-        await c.query(`insert into ${name}(${cols.join(',')}) values(${vals.map((_,i)=>'$'+(i+1)).join(',')})`,vals);
+        const inserted=await c.query(`insert into ${name}(${cols.join(',')}) values(${vals.map((_,i)=>'$'+(i+1)).join(',')})${createNative?' returning id':''}`,vals);
+        if(createNative)await attachPersonalOwner(c,inserted.rows[0].id,org,String(input.address));
       }
       await c.query('insert into audits(uid,action,target) values($1,$2,$3)',[a.id,name+'.save',String(requested ?? address ?? input.name)]);
     });

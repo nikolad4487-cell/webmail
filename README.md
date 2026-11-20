@@ -1,6 +1,6 @@
 # WebmailHR
 
-Webmail na hrvatskom za organizacije, škole i fakultete. Zajednički ulaz na `https://webmailhr.com` omogućuje odabir vrste računa i daje pristup sandučićima, adresama za slanje i kalendarima koji su korisniku dodijeljeni u PostgreSQL-u. Postojeći sandučići koriste IMAP/SMTP. Opcija 2 sprema poštu u PostgreSQL i šalje preko Mailjeta, bez VPS-a; probno je dopušten samo `demo@skolehr.xyz`.
+Webmail na hrvatskom za organizacije, škole i fakultete. Zajednički ulaz na `https://webmailhr.com` omogućuje odabir vrste računa i daje pristup sandučićima, adresama za slanje i kalendarima koji su korisniku dodijeljeni u PostgreSQL-u. Postojeći sandučići koriste IMAP/SMTP. Opcija 2 sprema poštu u PostgreSQL i šalje preko Mailjeta, bez VPS-a; početna proba koristi `demo@skolehr.xyz`, a dodatni osobni sandučići uključuju se kroz administraciju.
 
 
 ## Opcija 2: Cloudflare → HTTPS → PostgreSQL, Mailjet za slanje (bez VPS-a)
@@ -206,11 +206,55 @@ mijenja samo demo. Masovna aktivacija i prelazak DNS-a ostaju zaseban korak.
 Native adresa ne može se naknadno preimenovati niti pretvoriti u zajednički
 sandučić kroz obrazac. Dodjela drugom korisniku odbija se i na serverskoj ruti.
 
+### Automatsko i skupno stvaranje osobnih sandučića
+
+Migracija `003-mailbox-provisioning.sql` dodaje `domains.mailbox_backend`.
+Domene ostaju na `imap`, osim domena koje pri prvoj primjeni već imaju aktivan
+osobni native sandučić: one preuzimaju `native`. Ponovna migracija ne poništava
+kasniji izričiti izbor administratora. Zoho domena bez native sandučića ostaje
+nepromijenjena. Migracija ne stvara sandučiće, ne mijenja postojeću pohranu ni DNS.
+
+Glavni administrator bira **Domene → Uredi → Novi osobni sandučići → Cloudflare / Mailjet**.
+Na takvoj domeni, uz uključeno primanje/slanje i konfigurirane ključeve, spremanje
+novog osobnog sandučića automatski uključuje native pohranu i dodjeljuje ga aktivnom
+korisniku iste adrese i organizacije. Ako vlasnik ne postoji, cijelo spremanje se
+odbija. Zajednički i postojeći IMAP sandučići ne pretvaraju se automatski u native.
+
+U **Korisnici** i **Sandučići** gumb **Kreiraj sandučiće korisnicima** prvo prikazuje
+do 100 kandidata. Potvrda stvara samo nedostajuće osobne sandučiće i njihove ovlasti.
+Postojeće adrese, aliasi, automatski pošiljatelji, neaktivni i sinkronizirani korisnici
+se preskaču. Administrator organizacije radi samo u svojoj organizaciji; root može
+odabrati organizaciju ili sve. Ponovljeni i istodobni zahtjevi ne stvaraju duplikate.
+Za više od 100 kandidata postupak se ponavlja; dovršeni korisnici više nisu u pregledu.
+
+Za automatski primitak jednom pripremite Cloudflare za svaku već prebačenu domenu:
+
+1. U **Domene → Uredi** kliknite **Kopiraj kod Workera**, zamijenite kod u
+   `webmailhr-inbound` i kliknite **Deploy**. Kod je dostupan i u polju za ručno kopiranje.
+2. Postavite Workerovu tekstualnu varijablu `ENABLED_RECIPIENTS` na `*` i objavite je.
+   `INBOUND_URL` i postojeći `INBOUND_SECRET` ostaju isti. Zadani Worker i dalje
+   dopušta samo demo dok se ova opcija izričito ne uključi.
+3. Na domeni koja već ima odobren Cloudflare MX postavite **Email Routing → Catch-all →
+   Send to a Worker → webmailhr-inbound**. Postojeća pojedinačna demo pravila mogu ostati.
+4. Novi aktivni osobni native sandučići prihvaćaju se prema domenskoj politici baze,
+   bez novih pojedinačnih Cloudflare pravila ili Vercel allowliste. HMAC je obavezan.
+   Nepostojeća, IMAP, zajednička i neaktivna adresa odbija se prije čitanja MIME tijela;
+   dolazna poruka nikada ne stvara korisnika ni sandučić.
+
+Postojeći IMAP sandučić poput prethodno izrađenog Viktorova uključuje se zasebnim
+gumbom **Uključi Cloudflare / Mailjet**. Skupno stvaranje ga ne prepisuje i ne prenosi
+stare poruke. Za `formapoint.online` ne uključujte Cloudflare Routing niti mijenjajte
+Zoho MX bez zasebno dogovorenog prijelaza cijele domene.
+
+Lokalna provjera automatike koristi praznu PostgreSQL bazu:
+`TEST_PROVISION_DATABASE_URL=postgresql://USER:PASSWORD@127.0.0.1:5432/DISPOSABLE_DB npm run test:provisioning`.
+
 ### Status provjera i aktivacija
 
 Provedeno lokalno: **12/12 native integracijskih testova** (uključujući dodatnog
 vlasnika, uključivanje kroz administraciju i izolaciju dva osobna sandučića),
-**4/4 Worker provjere** i **8/8 postojećih
+**8/8 provjera automatike**, **5/5 Worker provjera**, **6/6 provjera lozinki**,
+**5/5 provjera migracija** i ranije provedeni **8/8 postojećih
 regresijskih testova**, `npm run build` (TypeScript i Vite) i Worker
 `wrangler deploy --dry-run`. Build ima upozorenje postojeće lucide-react
 biblioteke o direktivi use client. U pregledniku je otvorena prijavna stranica;
@@ -223,7 +267,9 @@ Produkcijska proba 20. 11. 2026.: korisnik je potvrdio Gmail → Cloudflare → 
 na Gmail. Izravna HTTPS proba potvrdila je spremanje i deduplikaciju. Worker
 koristi `redirect:'manual'`: workerd ne podržava `redirect:'error'`.
 Aktivacija i stvarna Gmail proba dodatnih sandučića, uključujući Viktora, ostaju
-zasebne provjere. `formapoint.online` zadržava Zoho MX do zasebnog odobrenja.
+zasebne provjere. Skupno stvaranje i catch-all automatika provjereni su lokalno;
+jednokratna Cloudflare postava i stvarna Gmail proba novog automatskog sandučića
+ostaju produkcijska provjera. `formapoint.online` zadržava Zoho MX do zasebnog odobrenja.
 
 ## Lokalno pokretanje
 

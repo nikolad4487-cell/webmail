@@ -34,6 +34,7 @@ before(async()=>{
   const migration=await readFile(new URL('../../migrations/001-native-mail.sql',import.meta.url),'utf8');
   await db.query(migration);await db.query(migration);
   await db.query(await readFile(new URL('../../migrations/002-mail-passwords.sql',import.meta.url),'utf8'));
+  await db.query(await readFile(new URL('../../migrations/003-mailbox-provisioning.sql',import.meta.url),'utf8'));
   const {hashPassword}=await import('../../server/db.ts');
   const {staffSecret}=await import('../../server/identity.ts');
   const password=await hashPassword(staffSecret('12345678'));

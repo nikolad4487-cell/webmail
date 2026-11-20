@@ -6,5 +6,6 @@ try {
   const schema=await readFile(new URL('../server/schema.sql', import.meta.url), 'utf8');
   const native=await readFile(new URL('../migrations/001-native-mail.sql', import.meta.url),'utf8');
   const passwords=await readFile(new URL('../migrations/002-mail-passwords.sql', import.meta.url),'utf8');
-  await transaction(client=>runMigrationQueries(client,schema,native,passwords));
+  const provisioning=await readFile(new URL('../migrations/003-mailbox-provisioning.sql', import.meta.url),'utf8');
+  await transaction(client=>runMigrationQueries(client,schema,native,passwords,provisioning));
 } finally { await db.end(); }
