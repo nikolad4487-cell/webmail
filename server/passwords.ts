@@ -1,7 +1,7 @@
 import {randomInt} from 'node:crypto';
 import {z} from 'zod';
 import {verifyPassword} from './db.js';
-import {staffSecret,verifyFormaPoint} from './identity.js';
+import {staffSecret,verifyFormaPoint,isLinkedFormaPoint} from './identity.js';
 
 export const newPassword=z.string().min(8,'Lozinka mora imati najmanje 8 znakova.').max(512);
 export const generatePassword=()=>String(randomInt(100_000_000)).padStart(8,'0');
@@ -15,7 +15,7 @@ export async function matchesPassword(account:PasswordAccount,value:string){
   return verifyPassword(value,account.password);
 }
 export async function verifyCurrentPassword(account:PasswordAccount,value:string){
-  if(account.auth_kind==='formapoint'&&!account.password){
+  if(isLinkedFormaPoint(account)){
     if(!account.source_email||!account.source_project||!account.source_user_id)return false;
     await verifyFormaPoint(account.source_email,value,{projectId:account.source_project,userId:account.source_user_id});
     return true;

@@ -205,6 +205,7 @@ export function setupData(api:Router){
       const {rows:[account]}=await c.query('select * from users where id=$1 for update',[uid]);
       if(!account || (a.role!=='root' && (account.org!==a.org || account.role!=='user')))return deny();
       if(!['staff','formapoint'].includes(account.auth_kind))throw new HttpError(409,'Lozinku dodjeljujete djelatnicima i FormaPoint korisnicima.');
+      if(account.auth_kind==='formapoint'&&account.source_user_id)throw new HttpError(409,'Povezani račun koristi zajedničku FormaPoint lozinku. Korisnik je mijenja u profilu.');
       await c.query("update users set password=$2,password_scheme='scrypt' where id=$1",[uid,await hashPassword(password)]);
       await c.query('delete from sessions where uid=$1',[uid]);
       await c.query('delete from resets where uid=$1',[uid]);
@@ -220,6 +221,7 @@ export function setupData(api:Router){
     const {org}=z.object({org:id.nullable()}).parse(req.body);
     const generated=await transaction(async c=>{
       const {rows}=await c.query(`select id,email from users where auth_kind in ('staff','formapoint') and active and password is null
+        and (auth_kind<>'formapoint' or source_user_id is null)
         and ($1::int is null or org=$1) order by id limit 50 for update skip locked`,[org]);
       const result=[];
       for(const row of rows){
@@ -315,6 +317,7 @@ export function setupData(api:Router){
           input.source_user_id=null;input.source_project=null;
         }
         if(kind==='formapoint'&&input.source_user_id){
+          if(typeof input.password==='string')throw new HttpError(409,'Povezani račun koristi zajedničku FormaPoint lozinku. Korisnik je mijenja u profilu.');
           input.source_email=email.parse(input.source_email ?? current?.source_email);
         }else{
           if(kind==='formapoint'&&input.source_email)throw new HttpError(400,'Za povezivanje FormaPoint računa unesite i stabilni ID.');

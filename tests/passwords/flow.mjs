@@ -9,7 +9,9 @@ assert.ok(['localhost','127.0.0.1'].includes(new URL(process.env.TEST_PASSWORD_D
 process.env.DATABASE_URL=process.env.TEST_PASSWORD_DATABASE_URL;
 process.env.NODE_ENV='test';process.env.DEMO_MODE='1';process.env.ADMIN_ORIGIN='';delete process.env.APP_ORIGIN;
 let db,server,sourceServer,base,admin,staff,linked,externalSelf,student,otherAdmin,org;
-let sourceCalls=0;
+let sourceCalls=0,sourceUpdateFailure=false,sourceWrongIdentity=false;
+const sourcePasswords=new Map();
+const sourceIdentity=email=>email.startsWith('self')?'self-source':email.startsWith('bulk')?'linked-source-bulk':'linked-source';
 const sourcePassword='External-Password-2026',initial='Assigned-Password-2026',changed='87654321';
 async function request(path,{session=admin,body,method=body?'POST':'GET',status=200}={}){
   const r=await fetch(base+'/api'+path,{method,headers:{...(session?{cookie:session}:{}),...(body?{'Content-Type':'application/json'}:{})},body:body?JSON.stringify(body):undefined});
@@ -38,9 +40,17 @@ before(async()=>{
   assert.equal((await db.query('select password_scheme from users where id=$1',[staff.id])).rows[0].password_scheme,'staff_pin');
   sourceServer=createServer(async(req,res)=>{
     sourceCalls++;let body='';for await(const c of req)body+=c;const input=JSON.parse(body);
-    const ok=input.password===sourcePassword&&req.headers.apikey==='local-auth-key';
-    res.setHeader('Content-Type','application/json');res.statusCode=ok?200:400;
-    res.end(JSON.stringify(ok?{user:{id:input.email.startsWith('self')?'self-source':'linked-source'}}:{error:'Invalid login'}));
+    res.setHeader('Content-Type','application/json');
+    if(req.method==='PUT'&&req.url==='/auth/v1/user'){
+      if(sourceUpdateFailure){res.statusCode=503;res.end('{}');return;}
+      const email=String(req.headers.authorization||'').replace('Bearer local-token-for:','');
+      if(!email||input.current_password!==(sourcePasswords.get(email)||sourcePassword)){res.statusCode=401;res.end('{}');return;}
+      assert.ok(input.password.length>=8);sourcePasswords.set(email,input.password);
+      res.end(JSON.stringify({id:sourceIdentity(email)}));return;
+    }
+    const ok=input.password===(sourcePasswords.get(input.email)||sourcePassword)&&req.headers.apikey==='local-auth-key';
+    res.statusCode=ok?200:400;
+    res.end(JSON.stringify(ok?{user:{id:sourceWrongIdentity?'other-subject':sourceIdentity(input.email)},access_token:'local-token-for:'+input.email}:{error:'Invalid login'}));
   }).listen(0,'127.0.0.1');await once(sourceServer,'listening');
   process.env.FORMAPOINT_SUPABASE_PROJECT_ID='formapoint-local';process.env.FORMAPOINT_SUPABASE_AUTH_KEY='local-auth-key';
   process.env.FORMAPOINT_SUPABASE_URL='http://127.0.0.1:'+sourceServer.address().port;
@@ -87,22 +97,32 @@ test('Old staff PIN survives migration; self-change revokes every session and ne
   await db.query(await readFile(new URL('../../migrations/002-mail-passwords.sql',import.meta.url),'utf8'));
   assert.equal((await db.query('select password_scheme from users where id=$1',[staff.id])).rows[0].password_scheme,'scrypt');
 });
-test('Existing FormaPoint login remains until admin assigns a WebmailHR password',async()=>{
-  const before=(await login(linked.email,sourcePassword)).cookie;
-  const count=sourceCalls;
-  const password=(await request('/admin/users/'+linked.id+'/password',{method:'POST'})).body.password;
-  assert.match(password,/^[0-9]{8}$/);
-  await request('/me',{session:before,status:401});
-  await login(linked.email,sourcePassword,401);assert.ok((await login(linked.email,password)).cookie);
-  assert.equal(sourceCalls,count,'Assigned password must not fall back to external authentication');
-  const {rows:[row]}=await db.query('select source_project,source_user_id,source_email from users where id=$1',[linked.id]);
-  assert.equal(row.source_user_id,'linked-source');assert.equal(row.source_email,'linked@external.test');
+test('Linked accounts always use FormaPoint, including older local overrides; administrators cannot split their password',async()=>{
+  const {hashPassword}=await import('../../server/db.ts');
+  await db.query('update users set password=$2 where id=$1',[linked.id,await hashPassword('old-local-password')]);
+  await login(linked.email,'old-local-password',401);assert.ok((await login(linked.email,sourcePassword)).cookie);
+  await request('/admin/users/'+linked.id+'/password',{method:'POST',status:409});
+  await saveUser(linked.email,'formapoint','Must-Not-Assign',{key:linked.id,source_user_id:'linked-source',source_email:'linked@external.test'}).then(()=>assert.fail('Expected rejection'),error=>assert.match(error.message,/409/));
 });
-test('FormaPoint user may replace source login with an independent WebmailHR password',async()=>{
-  const session=(await login(externalSelf.email,sourcePassword)).cookie;
-  await request('/account/password',{session,body:{currentPassword:sourcePassword,newPassword:'Own-Webmail-Password-2026'}});
-  await login(externalSelf.email,sourcePassword,401);assert.ok((await login(externalSelf.email,'Own-Webmail-Password-2026')).cookie);
-  await request('/me',{session,status:401});
+test('WebmailHR changes the original source password; eight digits work in both locations and failures do not create overrides',async()=>{
+  const first=(await login(externalSelf.email,sourcePassword)).cookie;
+  const second=(await login(externalSelf.email,sourcePassword)).cookie;
+  await request('/account/password',{session:first,body:{currentPassword:'wrong',newPassword:'87654321'},status:401});
+  await request('/account/password',{session:first,body:{currentPassword:sourcePassword,newPassword:'7654321'},status:400});
+  sourceWrongIdentity=true;
+  await request('/account/password',{session:first,body:{currentPassword:sourcePassword,newPassword:'87654321'},status:401});
+  sourceWrongIdentity=false;sourceUpdateFailure=true;
+  await request('/account/password',{session:first,body:{currentPassword:sourcePassword,newPassword:'87654321'},status:503});
+  sourceUpdateFailure=false;
+  assert.equal((await db.query('select password from users where id=$1',[externalSelf.id])).rows[0].password,null);
+  await request('/account/password',{session:first,body:{currentPassword:sourcePassword,newPassword:'87654321'}});
+  assert.equal(sourcePasswords.get('self@external.test'),'87654321');
+  await login(externalSelf.email,sourcePassword,401);assert.ok((await login(externalSelf.email,'87654321')).cookie);
+  for(const session of [first,second])await request('/me',{session,status:401});
+  assert.equal((await db.query('select password from users where id=$1',[externalSelf.id])).rows[0].password,null);
+  // A change from the original FormaPoint side immediately governs WebmailHR login.
+  sourcePasswords.set('self@external.test','12349876');
+  await login(externalSelf.email,'87654321',401);assert.ok((await login(externalSelf.email,'12349876')).cookie);
 });
 test('Student, anonymous user and other organization cannot assign or change another password',async()=>{
   await request('/account/password',{session:null,body:{currentPassword:initial,newPassword:changed},status:401});
@@ -114,13 +134,9 @@ test('Student, anonymous user and other organization cannot assign or change ano
   const blocked=await fetch(base+'/api/account/password',{method:'POST',headers:{cookie:staffSession,Origin:'https://untrusted.example','Content-Type':'application/json'},body:JSON.stringify({currentPassword:changed,newPassword:'Forged-Change-2026'})});
   assert.equal(blocked.status,403);
 });
-test('Bulk generation skips existing passwords and invalidates old FormaPoint sessions',async()=>{
+test('Bulk generation excludes linked FormaPoint accounts and preserves their source login',async()=>{
   const user=await saveUser('bulk@formapoint.test','formapoint',undefined,{source_user_id:'linked-source-bulk',source_email:'bulk@external.test'});
-  // No source login is needed to verify the transactional invalidation of existing sessions.
-  const {digest}=await import('../../server/db.ts');const token='b'.repeat(64);
-  await db.query("insert into sessions(token,uid,expires) values($1,$2,now()+interval '1 hour')",[digest(token),user.id]);
   const result=(await request('/admin/users/initial-passwords',{body:{org}})).body.generated;
-  assert.equal(result.some(x=>x.email===linked.email),false);
-  const row=result.find(x=>x.email===user.email);assert.match(row.password,/^[0-9]{8}$/);
-  await request('/me',{session:'wm_session='+token,status:401});assert.ok((await login(user.email,row.password)).cookie);
+  assert.equal(result.some(x=>x.email===linked.email||x.email===user.email),false);
+  assert.equal((await db.query('select password from users where id=$1',[user.id])).rows[0].password,null);
 });

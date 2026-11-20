@@ -88,7 +88,7 @@ function App(){
       {accountOpen&&<div className="account-menu">{session.account.auth_kind!=='ednevnik'&&<button onClick={()=>{setAccountOpen(false);setChangePassword(true);}}><KeyRound size={17}/> Promijeni lozinku</button>}{session.account.role!=='user'&&<button onClick={()=>open('admin')}><Settings size={17}/> Administracija</button>}<button onClick={async()=>{await api('/logout','POST').catch(()=>{});setSession(null);setAccountOpen(false);history.replaceState(null,'','/');setPage(getPage(settings.adminSite));}}><LogOut size={17}/> Odjavi se</button></div>}
     </div>
   </header>
-  {changePassword&&<ChangePassword close={()=>setChangePassword(false)} changed={()=>{setChangePassword(false);setLoginNotice('Lozinka je promijenjena. Prijavite se novom lozinkom.');setSession(null);history.replaceState(null,'','/');setPage(getPage(settings.adminSite));}}/>}
+  {changePassword&&<ChangePassword shared={session.account.shared_password} close={()=>setChangePassword(false)} changed={()=>{setChangePassword(false);setLoginNotice('Lozinka je promijenjena. Prijavite se novom lozinkom.');setSession(null);history.replaceState(null,'','/');setPage(getPage(settings.adminSite));}}/>}
   {page==='mail'&&<Mailbox session={session} recipient={recipient} clearRecipient={()=>setRecipient('')}/>}
   {page==='calendar'&&<Calendar boxes={session.boxes}/>}
   {page==='contacts'&&<Contacts compose={address=>{setRecipient(address);open('mail');}}/>}

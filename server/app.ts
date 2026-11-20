@@ -1,7 +1,7 @@
 import {matchesPassword,newPassword,verifyCurrentPassword} from './passwords.js';
 import {setupInbound} from './inbound.js';
 import {isNative,changeNative,MAX_NATIVE_BYTES} from './native-mail.js';
-import {invalidLogin,verifyFormaPoint,verifyStudent} from './identity.js';
+import {invalidLogin,verifyFormaPoint,verifyStudent,isLinkedFormaPoint,changeFormaPointPassword} from './identity.js';
 import express, {type Request,type Response} from 'express';
 import {z, ZodError} from 'zod';
 import {checkLoginDatabase,db,digest,hashPassword,loginDatabaseIssue,token,transaction,verifyPassword,type LoginDatabaseIssue} from './db.js';
@@ -116,10 +116,11 @@ async function signIn(req:Request,res:Response,adminLogin=false){
     if(linked && account?.id!==linked.id) throw invalidLogin();
     if(!account) throw noMailbox();
     verifiedId=account.id;
-  }else if(kind==='formapoint'&&!linked?.password){
+  }else if(linked&&isLinkedFormaPoint(linked)){
     if(!linked?.source_email) throw invalidLogin();
     checkedSourceEmail=linked.source_email;
     source=await verifyFormaPoint(linked.source_email,password,{projectId:linked.source_project,userId:linked.source_user_id});
+    checkedHash=linked.password;
     verifiedId=linked.id;
   }else{
     const allowed=linked && linked.auth_kind===kind && (
@@ -190,7 +191,7 @@ setupAutomation(api);
 api.use(async (req,_res,next)=>{
   const key=session(req);
   if(!key) throw new HttpError(401,'Prijavite se za nastavak.');
-  const {rows:[account]}=await db.query(`select u.id,u.org,u.email,u.name,u.role,u.auth_kind from users u join sessions s on s.uid=u.id where s.token=$1 and s.expires>now() and u.active and (u.auth_kind<>'local' or ${localAccount})`,[digest(key),demo]);
+  const {rows:[account]}=await db.query(`select u.id,u.org,u.email,u.name,u.role,u.auth_kind,(u.auth_kind='formapoint' and u.source_project is not null and u.source_user_id is not null and u.source_email is not null) as shared_password from users u join sessions s on s.uid=u.id where s.token=$1 and s.expires>now() and u.active and (u.auth_kind<>'local' or ${localAccount})`,[digest(key),demo]);
   if(!account || (adminOrigin && (account.role==='root')!==isAdminSite(req))) throw new HttpError(401,'Sesija je istekla.');
   Object.assign(req,{account}); next();
 });
@@ -200,15 +201,17 @@ api.post('/account/password',async(req,res)=>{
   const input=z.object({currentPassword:z.string().min(1).max(512),newPassword}).strict().parse(req.body);
   const {rows:[account]}=await db.query('select * from users where id=$1 and active',[a.id]);
   if(!account || !['staff','formapoint','local'].includes(account.auth_kind))return deny();
-  if(!await verifyCurrentPassword(account,input.currentPassword))throw invalidLogin();
+  const shared=isLinkedFormaPoint(account);
+  if(!shared&&!await verifyCurrentPassword(account,input.currentPassword))throw invalidLogin();
   if(input.currentPassword===input.newPassword)throw new HttpError(400,'Odaberite drukčiju novu lozinku.');
-  const hash=await hashPassword(input.newPassword);
+  const hash=shared?null:await hashPassword(input.newPassword);
   await transaction(async c=>{
     const {rows:[current]}=await c.query('select * from users where id=$1 and active for update',[a.id]);
     if(!current || current.password!==account.password || current.password_scheme!==account.password_scheme ||
       current.auth_kind!==account.auth_kind || current.source_project!==account.source_project ||
       current.source_user_id!==account.source_user_id || current.source_email!==account.source_email ||
       !(await c.query('select 1 from sessions where token=$1 and uid=$2 and expires>now()',[digest(session(req)!),a.id])).rowCount)throw new HttpError(401,'Sesija je istekla. Prijavite se ponovno.');
+    if(shared)await changeFormaPointPassword(current.source_email,input.currentPassword,input.newPassword,{projectId:current.source_project,userId:current.source_user_id});
     await c.query("update users set password=$2,password_scheme='scrypt' where id=$1",[a.id,hash]);
     await c.query('delete from sessions where uid=$1',[a.id]);
     await c.query('delete from resets where uid=$1',[a.id]);

@@ -588,3 +588,31 @@ i stavlja obavijest u red. DNS/MX se ovom objavom ne mijenja.
 Provjere: `npm run test:formapoint` (imenovanje, kolizije, preimenovanje),
 `npm run test:welcome` (jedna obavijest, točan predložak, izvorna prijava, bez
 promjene lozinke), native/lozinka/migracijske regresijske provjere i produkcijski build.
+
+### Zajednička FormaPoint i WebmailHR lozinka
+
+Računi s povezanim FormaPoint projektom, UUID-om i izvornim e-mailom uvijek
+provjeravaju prijavu u izvornom Supabase Auth sustavu, uključujući račune s
+ranijom lokalnom WebmailHR lozinkom. Izvorna lozinka time je jedina za obje prijave.
+Lokalni djelatnički i nepovezani računi zadržavaju svoju postojeću prijavu.
+
+Promjena u WebmailHR profilu provjerava aktivnu vlastitu sesiju, ponovno se
+prijavljuje na izvor trenutačnom lozinkom i uspoređuje vraćeni UUID prije promjene.
+Zatim `PUT /auth/v1/user` s vlastitim novim izvornim tokenom i `current_password`
+mijenja istu FormaPoint lozinku. Ne koristi se administratorski Supabase ključ.
+Tek nakon potvrde izvora briše se raniji lokalni override, poništavaju se WebmailHR
+sesije i bilježi audit. Neuspjeh izvora ne stvara lokalnu lozinku. Ako potvrda
+izvora ili lokalni commit izostane, API ne tvrdi da je promjena uspjela; sljedeća
+prijava uvijek provjerava aktualnu lozinku izvora.
+
+FormaPoint profil ima obrazac s trenutačnom, novom i potvrdom lozinke. Koristi
+Supabase provjeru aktualnog korisnika, ponovnu vlastitu prijavu i `updateUser`.
+Obje lokacije zahtijevaju najmanje 8 znakova i prihvaćaju znamenke bez obaveznog
+slova ili simbola. Povezani računi isključeni su iz dodjele zasebnih lozinki u
+administraciji i skupnog generiranja. Lozinke se ne zapisuju u logove.
+
+Provjera: 6 testova promjene lozinki, uključujući osam znamenki, promjene s obje
+strane, krivu lozinku/UUID, nedostupan izvor i zaštitu od lokalnog overridea;
+13 FormaPoint, 12 native i 5 welcome regresijskih testova te produkcijski build.
+FormaPoint ima dodatne testove vlastitog obrasca/helpera i jednokratnu, zasebno
+upravljanu produkcijsku provjeru pravila izvornog Auth sustava.
