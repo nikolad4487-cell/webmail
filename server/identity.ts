@@ -82,7 +82,8 @@ export async function changeFormaPointPassword(email:string,currentPassword:stri
   if([401,403].includes(response.status))throw invalidLogin();
   if(!response.ok)throw unavailable();
   let updated:unknown;try{updated=await response.json();}catch{throw unavailable();}
-  if((updated as {id?:unknown}|null)?.id!==link.userId)throw unavailable();
+  const record=updated as {id?:unknown;user?:{id?:unknown}}|null;
+  if((record?.user?.id??record?.id)!==link.userId)throw unavailable();
 }
 
 export function staffSecret(pin:string){
