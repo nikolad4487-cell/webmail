@@ -20,7 +20,7 @@ export function loginDatabaseIssue(error:unknown):LoginDatabaseIssue|undefined {
 
 export async function checkLoginDatabase() {
   // PostgreSQL resolves these tables, columns and read permissions without reading account data.
-  await db.query(`select u.id,u.auth_kind,u.password,u.active,u.email,u.role,u.source_project,u.source_user_id,u.source_email,
+  await db.query(`select u.id,u.auth_kind,u.password,u.password_scheme,u.active,u.email,u.role,u.source_project,u.source_user_id,u.source_email,
     s.token,s.uid,s.expires,l.key,l.count,l.expires
     from users u cross join sessions s cross join login_limits l limit 0`);
   const {rows:[rights]}=await db.query(`select

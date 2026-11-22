@@ -8,7 +8,7 @@ export async function api<T>(url:string,method='GET',body?:unknown):Promise<T>{
   return result as T;
 }
 export type Box={id:number;address:string;label:string;can_send:boolean;can_calendar:boolean;aliases:string[]};
-export type Session={account:{name:string;email:string;role:string};boxes:Box[];demo:boolean};
+export type Session={account:{name:string;email:string;role:string;auth_kind:string;shared_password:boolean};boxes:Box[];demo:boolean};
 export type Contact={id:number;name:string;email:string};
 export const toError=(e:unknown)=>e instanceof Error?e.message:'Radnja nije uspjela.';
 export const initials=(name:string)=>name.split(/[ .@]+/).slice(0,2).map(x=>x[0]).join('').toUpperCase();

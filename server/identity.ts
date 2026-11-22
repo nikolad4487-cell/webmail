@@ -5,6 +5,8 @@ import {demo,HttpError} from './mail.js';
 export const authKind=z.enum(['local','staff','ednevnik','formapoint']);
 export type ExternalKind='ednevnik'|'formapoint';
 export const externalKind=(kind:string):kind is ExternalKind=>kind==='ednevnik'||kind==='formapoint';
+export const isLinkedFormaPoint=(account:{auth_kind:string;source_project?:string|null;source_user_id?:string|null;source_email?:string|null})=>
+  account.auth_kind==='formapoint'&&!!account.source_project&&!!account.source_user_id&&!!account.source_email;
 export const sourceId=z.string().trim().min(1).max(200);
 export const invalidLogin=()=>new HttpError(401,'Korisničko ime, adresa ili lozinka nije ispravna.');
 const unavailable=()=>new HttpError(503,'Prijava putem odabranog sustava trenutačno nije dostupna.');
@@ -54,7 +56,7 @@ export async function verifyStudent(username:string,password:string){
   return {projectId:config.projectId,userId:parsed.data};
 }
 
-export async function verifyFormaPoint(email:string,password:string,link:{projectId:string;userId:string}){
+async function formaPointSession(email:string,password:string,link:{projectId:string;userId:string}){
   const config=project('formapoint');
   if(!config.apiKey) throw unavailable();
   if(config.projectId!==link.projectId) throw invalidLogin();
@@ -62,7 +64,26 @@ export async function verifyFormaPoint(email:string,password:string,link:{projec
     {email,password},{apikey:config.apiKey},[400,401,403]);
   const parsed=sourceId.safeParse((result as {user?:{id?:unknown}}|null)?.user?.id);
   if(!parsed.success || parsed.data!==link.userId) throw invalidLogin();
-  return link;
+  return {config,result:result as {access_token?:unknown},link};
+}
+export async function verifyFormaPoint(email:string,password:string,link:{projectId:string;userId:string}){
+  return (await formaPointSession(email,password,link)).link;
+}
+export async function changeFormaPointPassword(email:string,currentPassword:string,password:string,link:{projectId:string;userId:string}){
+  const {config,result}=await formaPointSession(email,currentPassword,link);
+  if(typeof result.access_token!=='string'||result.access_token.length<16)throw unavailable();
+  let response:Response;
+  try{
+    response=await fetch(new URL('/auth/v1/user',config.url),{method:'PUT',redirect:'error',signal:AbortSignal.timeout(8000),
+      headers:{apikey:config.apiKey,Authorization:'Bearer '+result.access_token,'Content-Type':'application/json'},
+      body:JSON.stringify({password,current_password:currentPassword})});
+  }catch{throw unavailable();}
+  if([400,422].includes(response.status))throw new HttpError(400,'FormaPoint nije prihvatio novu lozinku. Unesite najmanje 8 znakova i pokušajte ponovno.');
+  if([401,403].includes(response.status))throw invalidLogin();
+  if(!response.ok)throw unavailable();
+  let updated:unknown;try{updated=await response.json();}catch{throw unavailable();}
+  const record=updated as {id?:unknown;user?:{id?:unknown}}|null;
+  if((record?.user?.id??record?.id)!==link.userId)throw unavailable();
 }
 
 export function staffSecret(pin:string){

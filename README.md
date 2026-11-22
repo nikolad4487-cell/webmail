@@ -1,6 +1,6 @@
 # WebmailHR
 
-Webmail na hrvatskom za organizacije, škole i fakultete. Zajednički ulaz na `https://webmailhr.com` omogućuje odabir vrste računa i daje pristup sandučićima, adresama za slanje i kalendarima koji su korisniku dodijeljeni u PostgreSQL-u. Postojeći sandučići koriste IMAP/SMTP. Opcija 2 sprema poštu u PostgreSQL i šalje preko Mailjeta, bez VPS-a; probno je dopušten samo `demo@skolehr.xyz`.
+Webmail na hrvatskom za organizacije, škole i fakultete. Zajednički ulaz na `https://webmailhr.com` omogućuje odabir vrste računa i daje pristup sandučićima, adresama za slanje i kalendarima koji su korisniku dodijeljeni u PostgreSQL-u. Postojeći sandučići koriste IMAP/SMTP. Opcija 2 sprema poštu u PostgreSQL i šalje preko Mailjeta, bez VPS-a; početna proba koristi `demo@skolehr.xyz`, a dodatni osobni sandučići uključuju se kroz administraciju.
 
 
 ## Opcija 2: Cloudflare → HTTPS → PostgreSQL, Mailjet za slanje (bez VPS-a)
@@ -180,26 +180,118 @@ Aktualne limite i prihvatljivu namjenu računa provjerite prije aktivacije:
 [Vercel Functions](https://vercel.com/docs/functions/limitations).
 Besplatni paketi ne jamče kapacitet za neograničen broj osobnih sandučića.
 
-Za kasnije sandučiće na `skolehr.xyz` i `formapoint.online` model ima zasebne
-poruke po `box`, postojeće dodjele i globalni budget. Dodavanje zahtijeva provjeru
-vlasnika, native oznaku i proširenje obje allowliste; pilot skripta namjerno
-mijenja samo demo. Masovna aktivacija i prelazak DNS-a ostaju zaseban korak.
+Dodatne domene koriste isti Worker. Registrirajte domenu u administraciji i odaberite
+Cloudflare / Mailjet za nove osobne sandučiće, zatim za tu domenu konfigurirajte
+Cloudflare Email Routing catch-all i potvrdu Mailjet pošiljatelja. U univerzalnom
+Workeru s `ENABLED_RECIPIENTS=*` nema popisa domena: poslužitelj prihvaća samo
+registrirane native domene i postojeće aktivne osobne sandučiće. DNS migracija
+svake domene zaseban je korak; dodavanje domene ne mijenja MX.
 
-### Status provjera i aktivacija
+### Uključivanje dodatnog osobnog sandučića
 
-Provedeno lokalno: **8/8 native integracijskih testova**, **8/8 postojećih
-regresijskih testova**, `npm run build` (TypeScript i Vite) i Worker
-`wrangler deploy --dry-run`. Build ima upozorenje postojeće lucide-react
-biblioteke o direktivi use client. U pregledniku je otvorena prijavna stranica;
-prikaz nakon prijave i odgovor provjereni su na razini API-ja, ne kroz preglednik.
+Novi sandučići na native domeni uključuju se automatski opisanim postupkom ispod.
+Postojeći osobni IMAP sandučić glavni administrator uključuje gumbom
+**Sandučići → Uredi → Uključi Cloudflare / Mailjet**. Vlasnik mora biti aktivan,
+imati istu adresu i organizaciju te biti jedini korisnik s dodjelom sandučića.
+Postojeće IMAP poruke se ne prenose. Nakon toga provjerite poruku izvana, privitak
+i odgovor. Uz catch-all nisu potrebne nove varijable ili Worker kod za svaku adresu.
+Za `formapoint.online` zadržite Zoho MX do dogovorenog prelaska cijele domene.
 
-Lokalna provjera koristi pravi PostgreSQL, postojeću prijavu i Express API te
-simulirani Mailjet; ne dokazuje Cloudflareovu SMTP dostavu ili Gmail isporuku.
-Produkcijska proba čeka: pristup Vercelu/DB i migraciju, postojeću dodjelu demo
-sandučića, zajednički inbound secret, verificirani Mailjet sender i API ključeve,
-izravnu HTTPS dostavu stvarnog MIME-a, odgovor na Gmail i pregled SPF/DKIM/DMARC.
-Cloudflare SMTP → Worker → WebmailHR stvarnom porukom čeka i zasebno odobren
-MX prijelaz. Rezultate lokalnih i produkcijskih provjera vodite odvojeno.
+Native adresa ne može se naknadno preimenovati niti pretvoriti u zajednički
+sandučić kroz obrazac. Dodjela drugom korisniku odbija se i na serverskoj ruti.
+
+### Automatsko i skupno stvaranje osobnih sandučića
+
+Migracija `003-mailbox-provisioning.sql` dodaje `domains.mailbox_backend`.
+Domene ostaju na `imap`, osim domena koje pri prvoj primjeni već imaju aktivan
+osobni native sandučić: one preuzimaju `native`. Ponovna migracija ne poništava
+kasniji izričiti izbor administratora. Zoho domena bez native sandučića ostaje
+nepromijenjena. Migracija ne stvara sandučiće, ne mijenja postojeću pohranu ni DNS.
+
+Glavni administrator bira **Domene → Uredi → Novi osobni sandučići → Cloudflare / Mailjet**.
+Na takvoj domeni, uz uključeno primanje/slanje i konfigurirane ključeve, spremanje
+novog osobnog sandučića automatski uključuje native pohranu i dodjeljuje ga aktivnom
+korisniku iste adrese i organizacije. Ako vlasnik ne postoji, cijelo spremanje se
+odbija. Zajednički i postojeći IMAP sandučići ne pretvaraju se automatski u native.
+
+U **Korisnici** i **Sandučići** gumb **Kreiraj sandučiće korisnicima** prvo prikazuje
+do 100 kandidata. Potvrda stvara samo nedostajuće osobne sandučiće i njihove ovlasti.
+Postojeće adrese, aliasi, automatski pošiljatelji, neaktivni i sinkronizirani korisnici
+se preskaču. Administrator organizacije radi samo u svojoj organizaciji; root može
+odabrati organizaciju ili sve. Ponovljeni i istodobni zahtjevi ne stvaraju duplikate.
+Za više od 100 kandidata postupak se ponavlja; dovršeni korisnici više nisu u pregledu.
+
+Za automatski primitak jednom pripremite Cloudflare za svaku već prebačenu domenu:
+
+1. U **Domene → Uredi** kliknite **Kopiraj kod Workera**, zamijenite kod u
+   `webmailhr-inbound` i kliknite **Deploy**. Kod je dostupan i u polju za ručno kopiranje.
+2. Postavite Workerovu tekstualnu varijablu `ENABLED_RECIPIENTS` na `*` i objavite je.
+   `INBOUND_URL` i postojeći `INBOUND_SECRET` ostaju isti. Zadani Worker i dalje
+   dopušta samo demo dok se ova opcija izričito ne uključi.
+3. Na domeni koja već ima odobren Cloudflare MX postavite **Email Routing → Catch-all →
+   Send to a Worker → webmailhr-inbound**. Postojeća pojedinačna demo pravila mogu ostati.
+4. Novi aktivni osobni native sandučići prihvaćaju se prema domenskoj politici baze,
+   bez novih pojedinačnih Cloudflare pravila ili Vercel allowliste. HMAC je obavezan.
+   Nepostojeća, IMAP, zajednička i neaktivna adresa odbija se prije čitanja MIME tijela;
+   dolazna poruka nikada ne stvara korisnika ni sandučić.
+
+Postojeći IMAP sandučić poput prethodno izrađenog Viktorova uključuje se zasebnim
+gumbom **Uključi Cloudflare / Mailjet**. Skupno stvaranje ga ne prepisuje i ne prenosi
+stare poruke. Za `formapoint.online` ne uključujte Cloudflare Routing niti mijenjajte
+Zoho MX bez zasebno dogovorenog prijelaza cijele domene.
+
+Lokalna provjera automatike koristi praznu PostgreSQL bazu:
+`TEST_PROVISION_DATABASE_URL=postgresql://USER:PASSWORD@127.0.0.1:5432/DISPOSABLE_DB npm run test:provisioning`.
+
+### Automatski sandučići za FormaPoint registracije
+
+FormaPointova serverska ruta `/api/webmail-sync` provjerava aktualnog korisnika preko
+Supabase Auth `/user`, uključujući potvrđen e-mail, anonimnost i zabranu prijave.
+Preglednik ne smije zadati tuđi identitet. Potvrđena korisnička sesija automatski
+pokreće idempotentno povezivanje, odvojeno od prijave i provjere ovlasti; prekid
+veze ne blokira korištenje FormaPointa, a profil nudi ponovni pokušaj i WebmailHR poveznicu.
+
+FormaPoint i WebmailHR trebaju isti nasumični ključ od najmanje 32 znaka, isključivo
+u serverskim Production secrets: `WEBMAILHR_SYNC_SECRET` (FormaPoint) i
+`FORMAPOINT_PROVISION_SECRET` (WebmailHR). U WebmailHR uključite
+`FORMAPOINT_AUTO_MAILBOXES=1` i postojeće `FORMAPOINT_SUPABASE_*` postavke za prijavu.
+FormaPoint koristi već postavljeni `SUPABASE_URL` i serverski Supabase ključ.
+Privatni ključ, JWT korisnika i njegova lozinka nikad se ne šalju u payloadu WebmailHR-u.
+Receiver `/api/integrations/formapoint/provision` zahtijeva HMAC tijela s vremenskom
+provjerom i točnim projektnim identitetom; odbija preglednički Origin.
+
+Za jednokratnu pripremu operator poziva FormaPoint API s Bearer servisnim ključem
+(`WEBMAILHR_SYNC_SECRET`) i tijelom `{"mode":"setup"}`. To odabire native pohranu
+domene u aplikaciji, bez DNS promjene. Zatim `{"mode":"import","page":1}` uvozi
+postojeće potvrđene korisnike u serijama po 10; slijedite `nextPage` do `null`.
+Anonimni, nepotvrđeni i zabranjeni računi preskaču se. Ovi servisni pozivi nisu
+pristupačni običnoj korisničkoj sesiji ili pregledniku.
+
+Potvrđena adresa s vlastite domene ostaje ista, uključujući `admin@formapoint.online`;
+naziv adrese ne dodjeljuje administratorsku ulogu. Zauzete adrese i aliasi se ne preuzimaju. Za osobni prijavni e-mail
+stvara se adresa `ime.prezime@formapoint.online` iz potvrđenog računa. Kvačice se
+uklanjaju (`Marić` → `maric`, `Đurić` → `duric`). Zauzeto ime dobiva nastavke
+`ime.prezime2`, `ime.prezime3`, bez dodatne točke. Kad ime i prezime nisu dostupni,
+koristi se lokalni dio osobne e-mail adrese. Dodjela je transakcijska i provjerava
+korisnike, sandučiće, aliase i servisne adrese.
+Povezani korisnik zadržava adresu i nakon promjene prijavnog e-maila. U početku se
+prijavljuje FormaPoint podacima uz provjeru izvornog UUID-a. Postojeća neovisna
+WebmailHR lozinka ostaje važeća. Neaktivni, tuđi i rezervirani računi se ne preuzimaju;
+postojeći IMAP sandučić vraća `needs_activation` i ne pretvara se automatski.
+
+### Provjere
+
+Lokalno se koriste prazne PostgreSQL baze i simulirana vanjska autentikacija/slanje:
+12 native testova, 10 testova skupnog i automatskog stvaranja (uključujući treću
+domenu), 10 testova FormaPoint povezivanja, 6 testova lozinki, 5 testova migracija
+i 5 Worker testova. `npm run build` provjerava TypeScript i Vite.
+`TEST_FORMAPOINT_DATABASE_URL=postgresql://USER:PASSWORD@127.0.0.1:5432/DISPOSABLE_DB npm run test:formapoint`.
+FormaPoint ima zasebne testove vlastite serverske rute.
+
+Korisnik je 20. 11. 2026. potvrdio stvarni primitak i slanje za demo i Viktora na
+`skolehr.xyz`. Worker koristi `redirect:'manual'` jer workerd ne podržava `'error'`.
+FormaPoint DNS prelazak i stvarna registracija kroz produkcijski preglednik zahtijevaju
+zasebnu provjeru. Lokalni testovi ne dokazuju SMTP isporuku na Gmail.
 
 ## Lokalno pokretanje
 
@@ -228,7 +320,7 @@ DEMO_TLS=1 npm test
 npm run build
 ```
 
-Testovi provjeravaju izolaciju škola, pristup referadi, zabranu tuđeg privitka i pošiljatelja, SMTP/IMAP u oba smjera, sadržaj privitka, kvotu, jednu kopiju u Poslano, kalendar, .ics, ograničenje ključa, idempotentnost i odjavu. Provjeravaju i učeničku prijavu preko zaštićene rute, izravnu FormaPoint prijavu s provjerom Auth ID-a, zasebnu prijavu administratora, promjenu izvorne lozinke, reset PIN-a i pristup samo dodijeljenim sandučićima. Lokalni servisi simuliraju produkcijske izvore prijave. GreenMail varijanta provjerava i ispravan odgovor kad poslužitelj ne oglašava IMAP QUOTA.
+Testovi provjeravaju izolaciju škola, pristup referadi, zabranu tuđeg privitka i pošiljatelja, SMTP/IMAP u oba smjera, sadržaj privitka, kvotu, jednu kopiju u Poslano, kalendar, .ics, ograničenje ključa, idempotentnost i odjavu. Provjeravaju i učeničku prijavu preko zaštićene rute, izravnu FormaPoint prijavu s provjerom Auth ID-a, zasebnu prijavu administratora, promjenu izvorne lozinke, reset lozinke i pristup samo dodijeljenim sandučićima. Lokalni servisi simuliraju produkcijske izvore prijave. GreenMail varijanta provjerava i ispravan odgovor kad poslužitelj ne oglašava IMAP QUOTA.
 
 ## Produkcija
 
@@ -339,10 +431,10 @@ te provjerite prijavu na administratorskoj domeni.
 Na `https://webmailhr.com/` jedan obrazac prima korisničko ime ili e-mail adresu. Glavni administrator koristi postojeći lokalni račun na `https://admin.webmailhr.com/`. Postojeći lokalni demo računi s adresama `.test` ostaju dostupni u demo okruženju.
 
 - **e-Dnevnik.** Učenik unosi postojeće korisničko ime ili školsku e-mail adresu i lozinku. Postavite `EDNEVNIK_SUPABASE_PROJECT_ID` na project ref, `EDNEVNIK_SUPABASE_URL` na HTTPS URL Supabase projekta i `EDNEVNIK_USERNAME_LOGIN_URL` na puni HTTPS URL `https://e-ocjene.skolehr.xyz/api/auth/webmail/student`. Serverski `EDNEVNIK_USERNAME_LOGIN_TOKEN` mora imati istu vrijednost kao `WEBMAILHR_STUDENT_LOGIN_TOKEN` u e-Dnevniku. Ako su potrebne dodatne školske domene, navedite ih u `EDNEVNIK_LOGIN_DOMAINS` odvojene zarezom. Prema zadanim postavkama to su `skolehr.xyz` i `eskole.me`. WebmailHR povezuje vraćeni Auth ID i project ref s aktivnim računom s dodijeljenim osobnim sandučićem `@skolehr.xyz`.
-- **FormaPoint.** Postavite `FORMAPOINT_SUPABASE_PROJECT_ID` na zaseban project ref, `FORMAPOINT_SUPABASE_URL` na njegov HTTPS URL i `FORMAPOINT_SUPABASE_AUTH_KEY` na publishable ili anon ključ toga projekta. U administraciji WebmailHR-a za račun vrste FormaPoint unesite stabilni Auth ID i e-mail kako je upisan u FormaPoint Supabase Auth. Korisnik u isti obrazac unosi taj e-mail ili svoju povezanu WebmailHR adresu. WebmailHR pronalazi spremljeni izvorni e-mail, provjerava lozinku na `/auth/v1/token?grant_type=password` i traži isti Auth ID prije izdavanja sesije. Nakon migracije dopunite izvorni e-mail na već povezanim FormaPoint računima. Dodijelite `info@formapoint.online` samo ovlaštenim djelatnicima.
-- **Školski djelatnici.** Koriste punu WebmailHR adresu i osam znamenaka. U administraciji odaberite **Generiraj / resetiraj lozinku**. Lozinka se prikazuje jednom, a reset opoziva postojeće sesije. Postavite serverski `STAFF_PIN_PEPPER` na nasumičnu tajnu od najmanje 32 znaka. Ako je promijenite, izdajte nove lozinke.
+- **FormaPoint.** Postavite `FORMAPOINT_SUPABASE_PROJECT_ID` na zaseban project ref, `FORMAPOINT_SUPABASE_URL` na njegov HTTPS URL i `FORMAPOINT_SUPABASE_AUTH_KEY` na publishable ili anon ključ toga projekta. Novi FormaPoint korisnik može dobiti samostalnu WebmailHR lozinku bez vanjskog Auth ID-a. Za povezani račun u administraciji unesite stabilni Auth ID i e-mail kako je upisan u FormaPoint Supabase Auth. Korisnik u isti obrazac unosi taj e-mail ili svoju povezanu WebmailHR adresu. Dok povezanom računu nije dodijeljena WebmailHR lozinka, WebmailHR pronalazi spremljeni izvorni e-mail, provjerava lozinku na `/auth/v1/token?grant_type=password` i traži isti Auth ID prije izdavanja sesije. Nakon migracije dopunite izvorni e-mail na već povezanim FormaPoint računima. Dodijelite `info@formapoint.online` samo ovlaštenim djelatnicima.
+- **Djelatnici.** Administrator u obrascu korisnika dodjeljuje lozinku za WebmailHR ili klikne **Generiraj lozinku**. Nove lozinke imaju najmanje 8 znakova, a generator izdaje točno 8 nasumičnih brojčanih znamenki. Postojeći PIN-ovi ostaju valjani dok ih korisnik ili administrator ne zamijeni. `STAFF_PIN_PEPPER` potreban je samo za te stare PIN-ove; nove lozinke ne ovise o njemu.
 
-U administraciji odaberite vrstu računa prije povezivanja i dodijelite potrebne sandučiće. Aplikacija čuva par referenca projekta + izvorni Auth ID. Izvorni sustavi provjeravaju lozinku pri svakoj novoj prijavi. WebmailHR ne pohranjuje njihove lozinke ni tokene i sam provjerava dodjele za svako otvaranje sandučića ili privitka.
+U administraciji odaberite vrstu računa prije povezivanja i dodijelite potrebne sandučiće. Aplikacija čuva par referenca projekta + izvorni Auth ID. Izvorni sustavi provjeravaju učeničku lozinku i FormaPoint lozinku dok račun nema dodijeljenu WebmailHR lozinku. WebmailHR ne pohranjuje lozinke ni tokene izvornih sustava i sam provjerava dodjele za svako otvaranje sandučića ili privitka.
 
 ### Skupna sinkronizacija i osobni sandučići
 
@@ -381,11 +473,32 @@ Odsutnost korisnika u jednom učitavanju sama ne uklanja postojeći račun,
 članstvo ili poštu. Pri odlasku djelatnika deaktivirajte njegov WebmailHR
 račun prema pravilima ustanove.
 
-Novi djelatnici trebaju WebmailHR PIN. Glavni administrator u **Korisnici**
-može po organizaciji skupno preuzeti do 50 početnih PIN-ova izdanih samo za
-račune bez lozinke. Datoteka ih sadrži u čitljivom obliku. Podijelite ih
-pojedinačno pouzdanim kanalom i uklonite datoteku kad završite. Postojeće
-lozinke ostaju aktivne.
+Administrator u **Korisnici → Početne lozinke** može po organizaciji izdati
+lozinke za do 50 aktivnih djelatnika i FormaPoint korisnika koji nemaju WebmailHR
+lozinku. Datoteka sadrži lozinke u čitljivom obliku; predajte je sigurnim kanalom.
+Postojeće WebmailHR lozinke ne mijenjaju se. Pojedinačni reset dostupnom korisniku
+odmah opoziva sve njegove sesije. Lozinke se u bazi spremaju kao scrypt hash sa soli.
+
+Djelatnik, FormaPoint korisnik i glavni administrator mogu u izborniku računa
+odabrati **Promijeni lozinku**, unijeti trenutnu i dvaput novu lozinku. Nakon
+uspjeha sve sesije su opozvane i korisnik se ponovno prijavljuje. Promjena vrijedi
+samo za WebmailHR, ne mijenja lozinku u izvornom FormaPoint sustavu niti IMAP/SMTP
+pristupne podatke. Za učenike lozinkom i dalje upravlja e-Dnevnik.
+
+Prije objave primijenite migraciju `002-mail-passwords.sql` kroz `npm run migrate`
+ili postojeću Vercel migraciju. Ona označava stare staff PIN hashove i dopušta
+lokalnu lozinku za FormaPoint račune, uz očuvanje izvornih identiteta. Nove lozinke
+ne zapisujte u Git, logove ili audit; audit sadrži samo vrstu radnje i ID korisnika.
+
+Provjera novog toka na praznoj lokalnoj PostgreSQL bazi:
+
+```sh
+TEST_PASSWORD_DATABASE_URL=postgresql://USER:PASSWORD@127.0.0.1:5432/DISPOSABLE_DB npm run test:passwords
+```
+
+Provjere obuhvaćaju dodjelu i generiranje, stari PIN, promjenu vlastite lozinke,
+opoziv sesija, postojeću FormaPoint prijavu, samostalni FormaPoint račun i granice
+ovlasti administratora i korisnika.
 
 ### Dodjela učeničkog sandučića
 
@@ -438,3 +551,140 @@ Klijentska aplikacija za narudžbe i kampanje vodi raspored, primatelje i privol
 Redovito radite šifrirani `pg_dump --format=custom --file=webmail.dump "$DATABASE_URL"` i snimku volumena poštanskog poslužitelja (poruke, korisnici, kvote, aliasi, ključevi). Sačuvajte verziju aplikacije, popis DNS zapisa i odvojenu kopiju serverskih tajni prema proceduri pružatelja. Vratite dump u novu praznu bazu koristeći `pg_restore --exit-on-error --no-owner --dbname="$RESTORE_DATABASE_URL" webmail.dump`, vratite korespondirajuće mail volumene prema uputama servisa i u izoliranoj mreži provjerite prijavu, kvotu, privitke i probno slanje prije prebacivanja prometa. Pri vraćanju identiteta i sesija nakon incidenta poništite postojeće sesije i tokene oporavka te rotirajte tajne.
 
 Dolazna poruka prikazuje se kao tekst, a MIME privitci se preuzimaju kao datoteke. Pretraga i mape rade na IMAP-u. Niti se grupiraju prema zaglavljima Message-ID i In-Reply-To unutar trenutačno učitanih poruka. Pozivnice se mogu preuzeti kao .ics. Označavanje dostave traži stvarno povezani servis.
+
+### Ispravak prve uvezene FormaPoint adrese
+
+Migracija `004-formapoint-original-address.sql` vraća `admin@formapoint.online`
+umjesto nastavka dodijeljenog pri prvom uvozu. Obuhvaća samo točno povezani
+potvrđeni izvorni račun i njegov osobni native sandučić. Provjerava kolizije i
+vlasništvo, zadržava iste ID-eve računa i sandučića te lozinku, poruke, privitke i
+dodjele. Račun ostaje u ulozi `user`; stare sesije opozivaju se. Ponovna primjena
+ne stvara dodatne zapise. Serverska provjera pri migraciji potvrđuje rezultat.
+
+### Obavijest o FormaPoint sandučiću
+
+Uz serverski `FORMAPOINT_WELCOME_EMAIL=1`, stvaranje novog povezanog osobnog
+sandučića dodaje jednu obavijest u `formapoint_welcomes` (migracija 005). Poruka ide
+na potvrđenu izvornu e-mail adresu preko postojećeg Mailjeta, s nazivom pošiljatelja
+FormaPoint Tim, adresom novog sandučića i retkom **Lozinka: ona koju ste postavili
+za prijavu na FormaPoint**. Lozinka se ne generira, ne čita i ne šalje. Prijava
+i dalje provjerava izvornu FormaPoint lozinku i UUID. Postojeće neovisne WebmailHR
+lozinke ostaju sačuvane; takvim se računima ova uputa ne šalje.
+
+Obavijest se zapisuje u istoj transakciji kao sandučić i preuzima prije mrežnog
+poziva. Istodobne prijave ne šalju dvaput. Uspjeh se označava `sent` tek kad Mailjet
+potvrdi predaju. Kvota i nedostajuće postavke ostavljaju `pending`, a nejasan
+mrežni ishod ostavlja `unknown` za operatersku provjeru, bez automatskog ponavljanja.
+Sljedeći poziv provisioniranja obrađuje do 10 čekajućih obavijesti. Red ne sadrži
+lozinke ni tajne i ima server-only RLS. Odvojena dodjela lozinke ili promjena
+identiteta prije slanja poništava zastarjelu obavijest.
+
+Postojeće adrese s izvornim UUID nastavkom preimenuju se samo ako se potvrdi točan
+izvorni identitet i osobno vlasništvo. ID-evi, poruke, privitci, lozinke i prava
+ostaju isti; prilagođene i već skraćene adrese se ne mijenjaju. Jednokratna
+korisnička uputa za `nikoladuric280@gmail.com` dodjeljuje `nikola.duric@formapoint.online`
+i stavlja obavijest u red. DNS/MX se ovom objavom ne mijenja.
+
+Provjere: `npm run test:formapoint` (imenovanje, kolizije, preimenovanje),
+`npm run test:welcome` (jedna obavijest, točan predložak, izvorna prijava, bez
+promjene lozinke), native/lozinka/migracijske regresijske provjere i produkcijski build.
+
+### Zajednička FormaPoint i WebmailHR lozinka
+
+Računi s povezanim FormaPoint projektom, UUID-om i izvornim e-mailom uvijek
+provjeravaju prijavu u izvornom Supabase Auth sustavu, uključujući račune s
+ranijom lokalnom WebmailHR lozinkom. Izvorna lozinka time je jedina za obje prijave.
+Lokalni djelatnički i nepovezani računi zadržavaju svoju postojeću prijavu.
+
+Promjena u WebmailHR profilu provjerava aktivnu vlastitu sesiju, ponovno se
+prijavljuje na izvor trenutačnom lozinkom i uspoređuje vraćeni UUID prije promjene.
+Zatim `PUT /auth/v1/user` s vlastitim novim izvornim tokenom i `current_password`
+mijenja istu FormaPoint lozinku. Ne koristi se administratorski Supabase ključ.
+Tek nakon potvrde izvora briše se raniji lokalni override, poništavaju se WebmailHR
+sesije i bilježi audit. Neuspjeh izvora ne stvara lokalnu lozinku. Ako potvrda
+izvora ili lokalni commit izostane, API ne tvrdi da je promjena uspjela; sljedeća
+prijava uvijek provjerava aktualnu lozinku izvora.
+
+FormaPoint profil ima obrazac s trenutačnom, novom i potvrdom lozinke. Koristi
+Supabase provjeru aktualnog korisnika, ponovnu vlastitu prijavu i `updateUser`.
+Povezane FormaPoint lozinke na obje lokacije zahtijevaju najmanje 8 znakova,
+barem jedno malo slovo, jedno veliko slovo i jednu znamenku. Simbol nije obavezan. Povezani računi isključeni su iz dodjele zasebnih lozinki u
+administraciji i skupnog generiranja. Lozinke se ne zapisuju u logove.
+
+Provjera: 6 testova promjene lozinki, uključujući osam znakova sa slovima i brojem, promjene s obje
+strane, krivu lozinku/UUID, nedostupan izvor i zaštitu od lokalnog overridea;
+13 FormaPoint, 12 native i 5 welcome regresijskih testova te produkcijski build.
+FormaPoint ima dodatne testove vlastitog obrasca/helpera i jednokratnu, zasebno
+upravljanu produkcijsku provjeru pravila izvornog Auth sustava.
+
+## Školski sandučići i podaci za prijavu
+
+Ova integracija povezuje vlastite ŠkoleHR aplikacije e-Matica/e-Dnevnik koje koriste
+školski Supabase projekt. Ne povezuje službene CARNET sustave. Izvorni e-Dnevnik
+repozitorij i njegov PIN/TOTP postupak ostaju neizmijenjeni.
+
+- Učenici i roditelji koriste izvornu e-Dnevnik lozinku. WebmailHR ne sprema njezinu
+  čitljivu vrijednost i ne dopušta promjenu kroz svoj obrazac. Pri prvoj uspješnoj
+  prijavi izvornim školskim korisničkim imenom može stvoriti nedostajući sandučić.
+- Nastavnici/djelatnici dobivaju zasebnu nasumičnu lozinku za mail: osam znakova s
+  malim i velikim slovom i znamenkom. Promjena te lozinke ne poziva izvor niti
+  mijenja PIN. Početna lozinka čuva se šifrirana za izdavanje PDF-a najviše sedam
+  dana, a promjena lozinke uklanja primjerak za ispis.
+- Nove adrese koriste ime.prezime bez kvačica, zatim ime.prezime2, ime.prezime3.
+  Stabilni izvorni identitet čuva adresu kroz ponovne sinkronizacije; postojeći
+  ručni računi ne preuzimaju se samo zbog podudaranja imena.
+- Root gumb **Sinkroniziraj škole** obrađuje paginirani imenik. Dnevni cron u
+  03:00 UTC obrađuje jednu stranicu od najviše 30 izvornih profila, čuva nastavak i
+  ne prekoračuje Hobby raspored. Za veću početnu populaciju root može ponoviti
+  ručno osvježenje; jedan klik obrađuje do 20 stranica. Obnova školske godine
+  osvježava datum povezanosti do 31. listopada godine završetka dostupne izvorne
+  školske godine. Nedostajući izvorni datum ne izmišlja se.
+- Dovršena pouzdana snimka gasi nedostajuće uvezene identitete. Neuspjeli ili
+  konfliktni pregled ih ne briše. Promjena vrste identiteta zaustavlja prethodni
+  pristup do administratorske provjere. Root računi se ne gase tim postupkom.
+
+Migracija `006-school-mailboxes.sql` dodaje privatnu školsku vezu i stanje
+sinkronizacije u WebmailHR PostgreSQL, sa server-only RLS pravilima. PDF koristi
+predložak `shared/school-credential.mjs` i licencirane Noto Sans fontove iz
+`assets/fonts` (OFL.txt). Ispis sadrži samo dostupne izvorne osobne i školske podatke.
+Učenički/roditeljski redovni PDF ne otkriva postojeću lozinku. Izdavanje nove
+učeničke lozinke dostupno je samo ovlaštenom školskom administratoru iz e-Matice:
+prvo se provjeri škola i izvorni UUID, zatim se promijeni samo učenička Auth lozinka
+i preuzme PDF. PIN, TOTP i nastavničke vjerodajnice iz izvora ne dohvaćaju se ni
+mijenjaju. PDF se šalje uz no-store; tajne nisu u URL-u ili logovima.
+
+Produkcijska aktivacija zahtijeva izričito odobrenje za:
+
+1. Spremanje novih nasumičnih `SCHOOL_SYNC_TOKEN` i `CRON_SECRET` kao serverskih
+   Production secrets u Vercel projektu WebmailHR. Nikad ne koristiti VITE_*.
+2. Objavu `integrations/school-bridge/{index,handler}.ts` kao Supabase Edge Function
+   `webmail-school-bridge` u školskom projektu. `verify_jwt=false` koristi se samo
+   zato što funkcija sama provjerava 256-bitni servisni ključ preko javnog SHA-256
+   otiska, odnosno za korisničko izdavanje provjerava stvarni JWT kroz Auth `/user`
+   i školske uloge kroz bazu. Posjedovanje servisnog ključa ne dopušta izdavanje
+   učeničkih lozinki. Za njega je potrebna ovlaštena korisnička školska sesija.
+3. Objavu WebmailHR i e-Matica izmjena, primjenu migracije i početnu provjeru
+   imenika. Izvorne Supabase tablice nisu mijenjane. Ključ se ne objavljuje u kodu;
+   u Edge kodu nalazi se samo javni otisak za provjeru.
+
+Status aktivacije: korisnik je izričito odobrio produkcijske servisne ključeve,
+objavu integracije, obje aplikacije i početnu sinkronizaciju. Ključevi su spremljeni
+kao Production secrets; WebmailHR i e-Matica su READY, a školska Edge integracija
+je ACTIVE. Neautentificirani servisni i učenički PDF zahtjevi vraćaju 401.
+Imenik se dohvaća u stranicama od 10 profila i najviše pet paralelnih provjera;
+pogreška izvornog Auth servisa prekida snimku, a uklonjen račun (404) se preskače.
+Početna sinkronizacija dovršena je 22. studenoga 2026.: obrađeno je 305 izvornih
+profila, kreirano 298 novih sandučića i povezan jedan postojeći. Jedan sukob
+naziva riješen je numeričkim nastavkom bez prepisivanja postojeće adrese.
+Neaktivni/nepotvrđeni računi ili računi bez odgovarajuće školske veze ne uvoze se.
+Stvarnom učeniku nije izdana nova lozinka
+radi testiranja. Dnevni cron nastavlja jednu stranicu, a administratorski gumb
+obrađuje do 20 stranica po pokretanju. Za trenutačno masovno osvježavanje koristiti
+gumb; novi obiteljski račun može se kreirati i pri uspješnoj izvornoj prijavi.
+
+
+Provjere: `TEST_SCHOOL_DATABASE_URL=... npm run test:schools` (prazna lokalna baza),
+uključuje opseg škole, nepromijenjen PIN, učenika/roditelja, Unicode PDF, promjenu
+učiteljske lozinke i nedostupan izvor. Regresije: native, provisioning, lozinke,
+FormaPoint, welcome, Prisma-style migracije/RLS i build. e-Matica ima svoj build i
+testove. PDF je renderiran i vizualno pregledan s izmišljenim podacima.

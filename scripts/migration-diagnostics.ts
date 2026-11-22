@@ -1,7 +1,7 @@
 import type {PoolClient} from 'pg';
 
-export type MigrationStage='connection'|'lock'|'schema'|'native';
-const stages:Record<MigrationStage,string>={connection:'spajanje na bazu',lock:'zaključavanje migracije',schema:'osnovna shema',native:'pohrana poruka i privitaka'};
+export type MigrationStage='connection'|'lock'|'schema'|'native'|'passwords'|'provisioning'|'addresses'|'welcomes';
+const stages:Record<MigrationStage,string>={connection:'spajanje na bazu',lock:'zaključavanje migracije',schema:'osnovna shema',native:'pohrana poruka i privitaka',passwords:'korisničke lozinke',provisioning:'automatski osobni sandučići',addresses:'izvorne adrese FormaPoint korisnika',welcomes:'obavijesti o osobnim sandučićima'};
 const objects:Record<string,string>={schema:'shema',table:'tablica',sequence:'sekvenca',function:'funkcija',database:'baza',relation:'relacija'};
 
 // Only recognize PostgreSQL permission messages with simple identifiers. Never log arbitrary
@@ -35,8 +35,12 @@ export function migrationFailureMessage(error:unknown){
     : 'Provjerite vezu i ovlasti PostgreSQL korisnika.';
   return `WebmailHR: migracija nije uspjela${code}. Korak: ${stages[failed.stage]}. ${failed.permission} ${hint}`.replace(/ +/g,' ');
 }
-export async function runMigrationQueries(client:Pick<PoolClient,'query'>,schema:string,native:string){
+export async function runMigrationQueries(client:Pick<PoolClient,'query'>,schema:string,native:string,passwords?:string,provisioning?:string,addresses?:string,welcomes?:string){
   const steps:[MigrationStage,string][]=[['lock',"select pg_advisory_xact_lock(hashtext('webmailhr.schema'))"],['schema',schema],['native',native]];
+  if(passwords)steps.push(['passwords',passwords]);
+  if(provisioning)steps.push(['provisioning',provisioning]);
+  if(addresses)steps.push(['addresses',addresses]);
+  if(welcomes)steps.push(['welcomes',welcomes]);
   for(const [stage,sql] of steps){
     try{await client.query(sql);}
     catch(error){throw new MigrationFailure(stage,error);}
