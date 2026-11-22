@@ -37,3 +37,11 @@ WebmailHR: `npm run build`, `npm run test:identity` te `npm run test:native` uz 
 ## Prisma objava
 
 Postojeći Prisma Node adapter očekuje `dist/index.js`; sam Vite build stvara samo web-sučelje. Workflow sada koristi `npm run build:prisma`, koji dodatno prevodi poslužitelj i piše ESM pokretač. Izgrađeni artefakt lokalno je pokrenut iz vlastitog `dist` direktorija: provjereni su HTML sučelje i `/api/login-settings`. Produkcijske tajne nisu dio artefakta.
+
+## Promjena lozinke iz WebmailHR-a
+
+Učenik u izborniku računa koristi „Promijeni lozinku”: obavezna je trenutna lozinka, čisti učenički profil i točan povezani izvorni Auth ID. Izvorni servis mijenja učenikov Supabase Auth, potvrđuje novu prijavu i ne mijenja PIN/TOTP nastavnika. Webmail ne stvara lokalnu zamjensku učeničku lozinku; nakon potvrde opoziva njegove Webmail sesije. Roditelj ne dobiva tu radnju. Nastavnik mijenja isključivo svoj Webmail scrypt hash.
+
+Ovlašteni Webmail administrator može izdati novu učeničku lozinku samo za povezanu aktivnu školu, uz provjeru iste aktivne učeničke veze u izvornom servisu. Nakon potvrde dobiva privremeni prikaz i PDF s upravo izdanom lozinkom. Nastavničko administratorsko izdavanje također nudi PDF, bez pisanja početne lozinke u školsku tablicu. Prikaz nestaje najkasnije nakon pet minuta ili skrivanja kartice; PDF s lozinkom nije arhiviran na serveru i ne preuzima se naknadnim GET-om. Samostalna promjena u profilu ne otvara administratorski PDF.
+
+Izvor: `integrations/school-bridge` mora se objaviti prije Webmaila. Postojeći e-Matica postupci ostaju povezani na isti izvor učeničke lozinke i nastavnikovu Webmail provjeru. Provjere: `test:schools`, `test:passwords`, `test:native` u odvojenim praznim PostgreSQL bazama te build; stvarni produkcijski računi nisu korišteni za resetiranje.

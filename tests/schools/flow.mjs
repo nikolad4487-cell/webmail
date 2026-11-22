@@ -38,6 +38,14 @@ before(async()=>{
    else {passwords.set(student.sourceLogin,'Newpupil8');res.end(JSON.stringify({ok:true,credential:{subject:student.subject,password:'Newpupil8'}}));}return;
   }
   assert.equal(req.headers.authorization,'Bearer '+process.env.SCHOOL_SYNC_TOKEN);
+  if(body.action==='student-change-password'){
+   if(body.subject!==student.subject||body.username!==student.sourceLogin||body.currentPassword!==passwords.get(student.sourceLogin)){res.statusCode=401;res.end('{}');return;}
+   passwords.set(student.sourceLogin,body.newPassword);res.end(JSON.stringify({ok:true,user_id:student.subject}));return;
+  }
+  if(body.action==='webmail-issue-student-password'){
+   if(body.subject!==student.subject||body.schoolId!==school.id){res.statusCode=403;res.end('{}');return;}
+   passwords.set(student.sourceLogin,'Adminpwd8');res.end(JSON.stringify({ok:true,credential:{subject:student.subject,password:'Adminpwd8'}}));return;
+  }
   if(body.action==='family-login'){
    const p=[student,parent].find(p=>p.sourceLogin===body.username||p.sourceLogin.split('@')[0]===body.username);
    if(!p||passwords.get(p.sourceLogin)!==body.password){res.statusCode=401;res.end('{}');return;}res.end(JSON.stringify({user_id:p.subject}));return;
@@ -61,17 +69,17 @@ test('School teacher receives native private mailbox and independent mixed passw
  const second=await syncPerson(person('teacher','Marko Marić','second@source.test'),'again');assert.equal(second.address,'marko.maric2@skolehr.xyz');
  const sameDomain=await syncPerson(person('teacher','Marko Marić','obfuscated-id@skolehr.xyz'),'again');assert.equal(sameDomain.address,'marko.maric3@skolehr.xyz');
 });
-test('Student and parent provision on first source-verified login; cannot change their password in WebmailHR',async()=>{
+test('Student and parent provision on source-verified login; parent cannot change a pupil password',async()=>{
  for(const p of [student,parent]){
   const cookie=await login(p.sourceLogin.split('@')[0],passwords.get(p.sourceLogin));assert.ok(cookie);
   const account=await (await request('/me',{cookie})).json();assert.equal(account.account.auth_kind,'ednevnik');assert.equal(account.boxes.length,1);
-  await request('/account/password',{cookie,method:'POST',body:{currentPassword:passwords.get(p.sourceLogin),newPassword:'Otherpwd1'},status:403});
+  if(p.kind==='parent')await request('/account/password',{cookie,method:'POST',body:{currentPassword:passwords.get(p.sourceLogin),newPassword:'Otherpwd1'},status:403});
  }
  const record=(await db.query('select u.email from users u where source_user_id=$1',[student.subject])).rows[0];assert.equal(record.email,'luka.kovac@skolehr.xyz');
  assert.ok(await login('luka.kovac','Pupilpwd1'));
 });
 test('Credential PDF preserves Unicode, institution and separate teacher password semantics; cross-school access is blocked',async()=>{
- const response=await request('/admin/users/'+teacherRecord.uid+'/credentials.pdf');assert.equal(response.headers.get('content-type'),'application/pdf');
+ const response=await request('/admin/users/'+teacherRecord.uid+'/credentials.pdf',{method:'POST',body:{password:teacherPassword}});assert.equal(response.headers.get('content-type'),'application/pdf');
  const text=pdfText(Buffer.from(await response.arrayBuffer()));assert.match(text,/Marko Marić Novi/);assert.ok(text.includes(teacherPassword));assert.match(text,/PIN za e-Dnevnik je zaseban/);assert.match(text,/31.10.2028/);
  const otherSchool=(await db.query("insert into schools(org,name) values($1,'Other school') returning id",[org])).rows[0].id;
  const u=(await db.query("insert into users(org,school,email,name,password,role,auth_kind) values($1,$2,'scope@skolehr.xyz','Scope','unused','admin','staff') returning id",[org,otherSchool])).rows[0];
@@ -87,7 +95,7 @@ test('A new pupil password is issued only through authorized e-Matica action and
  const text=pdfText(Buffer.from(await response.arrayBuffer()));assert.match(text,/Newpupil8/);assert.match(text,/luka.kovac@skolehr.xyz/);assert.match(text,/Nova lozinka vrijedi za e-Dnevnik i WebmailHR/);
  await login('luka.kovac@skolehr.xyz','Pupilpwd1',401);assert.ok(await login('luka.kovac@skolehr.xyz','Newpupil8'));
  const uid=(await db.query('select id from users where source_user_id=$1',[student.subject])).rows[0].id;
- const existing=pdfText(Buffer.from(await (await request('/admin/users/'+uid+'/credentials.pdf')).arrayBuffer()));assert.ok(!existing.includes('Newpupil8'));assert.match(existing,/Postojeća lozinka/);
+ await request('/admin/users/'+uid+'/credentials.pdf',{status:409});
  assert.equal(sourcePins.get(teacher.subject),'1234');assert.ok(calls.every(x=>!Object.hasOwn(x,'pin')));
 });
 test('Teacher can change only the mail password; previous printable password disappears',async()=>{
@@ -141,4 +149,30 @@ test('Malformed imported names and mailbox addresses repair in place without los
  const repeated=await syncPerson(p,'repeat');assert.equal(repeated.address,repaired.address);
  const duplicate=await syncPerson(person('student',raw,'other@source.test'),'collision');assert.equal(duplicate.address,'fran.tomic2@skolehr.xyz');
  const inspection=await (await request('/integrations/schools/sync?inspectNames=1',{cookie:null,token:process.env.CRON_SECRET})).json();assert.ok(inspection.users.some(u=>u.id===first.uid&&u.name==='Fran Tomić'&&u.mailbox_label==='Fran Tomić'));
+});
+
+test('Pupil self-change updates source password, revokes mail sessions and never stores a local override',async()=>{
+ const u=(await db.query('select u.* from users u join school_mail_identities s on s.uid=u.id where s.subject=$1',[student.subject])).rows[0];
+ const current=passwords.get(student.sourceLogin),cookie=await login(u.email,current);
+ assert.equal((await (await request('/me',{cookie})).json()).account.student_password,true);
+ sourceFailure=true;await request('/account/password',{cookie,method:'POST',body:{currentPassword:current,newPassword:'Selfpwd8'},status:503});sourceFailure=false;assert.equal(passwords.get(student.sourceLogin),current);
+ await request('/account/password',{cookie,method:'POST',body:{currentPassword:'wrong',newPassword:'Selfpwd8'},status:401});
+ await request('/account/password',{cookie,method:'POST',body:{currentPassword:current,newPassword:'Selfpwd8'}});
+ assert.equal(passwords.get(student.sourceLogin),'Selfpwd8');assert.equal((await db.query('select password from users where id=$1',[u.id])).rows[0].password,null);
+ await request('/me',{cookie,status:401});await login(u.email,current,401);await login(u.email,'Selfpwd8');
+});
+test('Webmail administrator issues pupil password with printable PDF, preserving source teacher PIN',async()=>{
+ const u=(await db.query('select u.* from users u join school_mail_identities s on s.uid=u.id where s.subject=$1',[student.subject])).rows[0];
+ const response=await request('/admin/users/'+u.id+'/student-password',{method:'POST'}),issued=await response.json();assert.equal(issued.password,'Adminpwd8');
+ const pdf=await request('/admin/users/'+u.id+'/credentials.pdf',{method:'POST',body:{password:issued.password}});assert.match(pdfText(Buffer.from(await pdf.arrayBuffer())),/Adminpwd8/);
+ assert.equal((await db.query('select initial_password from school_mail_identities where uid=$1',[u.id])).rows[0].initial_password,null);assert.equal(sourcePins.get(teacher.subject),'1234');
+});
+
+test('Webmail staff reissue prints only the new mail password and preserves source PIN',async()=>{
+ const before=calls.length;
+ const r=await request('/admin/users/'+teacherRecord.uid+'/password',{method:'POST'}),issued=await r.json();
+ assert.match(issued.password,/^[a-zA-Z0-9]{8}$/);await login(teacherRecord.address,issued.password);
+ const pdf=await request('/admin/users/'+teacherRecord.uid+'/credentials.pdf',{method:'POST',body:{password:issued.password}});assert.ok(pdfText(Buffer.from(await pdf.arrayBuffer())).includes(issued.password));
+ assert.equal(sourcePins.get(teacher.subject),'1234');assert.equal(calls.length,before);
+ assert.equal((await db.query('select initial_password from school_mail_identities where uid=$1',[teacherRecord.uid])).rows[0].initial_password,null);
 });

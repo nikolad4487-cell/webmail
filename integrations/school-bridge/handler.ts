@@ -47,6 +47,32 @@ export function schoolBridge(config:Settings,send:typeof fetch=fetch){
    const hash=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(token))),v=>v.toString(16).padStart(2,'0')).join('');
    let difference=hash.length^config.tokenHash.length;for(let i=0;i<hash.length;i++)difference|=hash.charCodeAt(i)^(config.tokenHash.charCodeAt(i)||0);
    const service=difference===0;
+   if(body.action==='student-change-password'){
+    if(!service||origin)return reply(403,{error:'Servisni pristup je obavezan.'});
+    if(!uuid(body.subject)||typeof body.username!=='string'||body.username.length>254||typeof body.currentPassword!=='string'||!body.currentPassword||body.currentPassword.length>512||typeof body.newPassword!=='string'||body.newPassword.length<8||body.newPassword.length>512||!/[a-z]/.test(body.newPassword)||!/[A-Z]/.test(body.newPassword)||!/[0-9]/.test(body.newPassword)||body.currentPassword===body.newPassword)return reply(400,{error:'Neispravni podaci za promjenu lozinke.'});
+    const p=await profileFor(body.subject),info=await roleInfo(p);
+    if(!info.values.includes('STUDENT')||info.values.some(v=>v!=='STUDENT')||info.members.length&&!info.active.length)return reply(403,{error:'Promjena je dostupna samo učeniku.'});
+    if(String(p.email).toLowerCase()!==body.username.trim().toLowerCase())return reply(403,{error:'Račun nije povezan.'});
+    const signed=await api('/auth/v1/token?grant_type=password','POST',{email:p.email,password:body.currentPassword});
+    if(signed.user?.id!==body.subject||typeof signed.access_token!=='string')return reply(401,{error:'Prijava nije ispravna.'});
+    const updated=await api('/auth/v1/user','PUT',{password:body.newPassword},signed.access_token);
+    if((updated.user??updated).id!==body.subject)return reply(503,{error:'Promjena lozinke nije potvrđena.'});
+    const checked=await api('/auth/v1/token?grant_type=password','POST',{email:p.email,password:body.newPassword});
+    if(checked.user?.id!==body.subject)return reply(503,{error:'Promjena lozinke nije potvrđena.'});
+    return reply(200,{ok:true,user_id:body.subject});
+   }
+   if(body.action==='webmail-issue-student-password'){
+    if(!service||origin)return reply(403,{error:'Servisni pristup je obavezan.'});
+    if(!uuid(body.subject)||typeof body.schoolId!=='string'||!body.schoolId||body.schoolId.length>200)return reply(400,{error:'Neispravni podaci.'});
+    const p=await profileFor(body.subject),info=await roleInfo(p);
+    if(!info.values.includes('STUDENT')||info.values.some(v=>v!=='STUDENT')||!info.active.some((r:any)=>r.school_id===body.schoolId&&normalize(r.role)==='STUDENT'))return reply(403,{error:'Račun nije aktivan učenik odabrane škole.'});
+    const password=randomPassword();
+    const updated=await api('/auth/v1/admin/users/'+body.subject,'PUT',{password});
+    if((updated.user??updated).id!==body.subject)return reply(503,{error:'Promjena nije potvrđena.'});
+    const checked=await api('/auth/v1/token?grant_type=password','POST',{email:p.email,password});
+    if(checked.user?.id!==body.subject)return reply(503,{error:'Nova lozinka nije potvrđena.'});
+    return reply(200,{ok:true,credential:{subject:body.subject,password}});
+   }
    if(body.action==='family-login'){
     if(!service||origin)return reply(403,{error:'Servisni pristup je obavezan.'});
     if(typeof body.username!=='string'||typeof body.password!=='string'||body.password.length>512||!body.password||body.username.length>254)return reply(400,{error:'Neispravni podaci.'});
