@@ -1,0 +1,3 @@
+BEGIN;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS identity_password boolean NOT NULL DEFAULT false;
+COMMIT;

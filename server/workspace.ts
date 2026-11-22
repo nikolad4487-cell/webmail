@@ -150,6 +150,7 @@ export function setupData(api:Router){
         value=generatePin();
         secret=staffSecret(value);
       }while(account.password && await verifyPassword(secret,account.password));
+      if(account.identity_password)throw new HttpError(409,'Novu zajedničku lozinku izdajte u e-Matici.');
       await c.query('update users set password=$2,recovery=null where id=$1',[uid,await hashPassword(secret)]);
       await c.query('delete from sessions where uid=$1',[uid]);
       await c.query('delete from resets where uid=$1',[uid]);

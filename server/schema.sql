@@ -34,6 +34,9 @@ alter table users add column if not exists source_email text
   check (source_email is null or (auth_kind='formapoint' and source_email=lower(source_email)));
 create unique index if not exists users_source_email on users(source_email) where source_email is not null;
 
+-- Issued alphanumeric Webmail password mode; e-Dnevnik PIN/TOTP is separate.
+alter table users add column if not exists identity_password boolean not null default false;
+
 create table if not exists directory_identities(
   project text not null,
   subject text not null,

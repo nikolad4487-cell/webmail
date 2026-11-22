@@ -163,3 +163,40 @@ test('Worker odbija poruku nakon iscrpljenih HTTPS pokušaja; Mailjet kvota sprj
   await request('/mail/'+box+'/send',{body:{from:'demo@skolehr.xyz',to:['sender@example.test'],subject:'Quota',text:'Quota'},status:429});
   assert.equal(sent.length,previous);delete process.env.MAILJET_DAILY_RECIPIENTS;
 });
+
+test('Izdani identitet: nastavnikova Webmail lozinka i učenikov izvorni Auth otvaraju samo dodijeljeni sandučić',async()=>{
+ const {hashPassword,verifyPassword}=await import('../../server/db.ts'),{staffSecret}=await import('../../server/identity.ts');
+ const project='identity-test-source',schoolSource='identity-test-school',teacherId='10000000-0000-4000-8000-000000000001',pupilId='10000000-0000-4000-8000-000000000002';
+ const teacherEmail='identity-teacher@skolehr.xyz',pupilEmail='identity-pupil@skolehr.xyz',teacherPassword='Te9abcXY',pupilPassword='St8abcXY';
+ const keys=['EDNEVNIK_IDENTITY_ISSUANCE_TOKEN','EDNEVNIK_SUPABASE_PROJECT_ID','EDNEVNIK_SUPABASE_URL','EDNEVNIK_USERNAME_LOGIN_URL','EDNEVNIK_USERNAME_LOGIN_TOKEN'];const previous=Object.fromEntries(keys.map(k=>[k,process.env[k]]));
+ let sourceCalls=0;
+ const source=createServer(async(req,res)=>{let raw='';for await(const c of req)raw+=c;const x=JSON.parse(raw);sourceCalls++;res.setHeader('Content-Type','application/json');if(req.headers.authorization==='Bearer identity-source-token'&&x.username===pupilEmail&&x.password===pupilPassword)res.end(JSON.stringify({user_id:pupilId}));else{res.statusCode=401;res.end(JSON.stringify({error:'invalid'}));}}).listen(0,'127.0.0.1');await once(source,'listening');
+ process.env.EDNEVNIK_IDENTITY_ISSUANCE_TOKEN='identity-issuance-token';process.env.EDNEVNIK_SUPABASE_PROJECT_ID=project;process.env.EDNEVNIK_SUPABASE_URL='http://127.0.0.1:'+source.address().port;process.env.EDNEVNIK_USERNAME_LOGIN_URL=process.env.EDNEVNIK_SUPABASE_URL+'/student';process.env.EDNEVNIK_USERNAME_LOGIN_TOKEN='identity-source-token';
+ try{
+  const org=(await db.query("select id from organizations where name='Native pilot'")).rows[0].id;
+  const school=(await db.query("insert into schools(org,name) values($1,'Identity school') returning id",[org])).rows[0].id;
+  await db.query('insert into directory_schools(project,subject,school) values($1,$2,$3)',[project,schoolSource,school]);
+  const teacher=(await db.query("insert into users(org,school,email,name,password,auth_kind) values($1,$2,$3,'Ogledni nastavnik',$4,'staff') returning id",[org,school,teacherEmail,await hashPassword(staffSecret('12345678'))])).rows[0].id;
+  const pupil=(await db.query("insert into users(org,school,email,name,password,auth_kind,source_project,source_user_id) values($1,$2,$3,'Ogledni učenik',null,'ednevnik',$4,$5) returning id",[org,school,pupilEmail,project,pupilId])).rows[0].id;
+  const boxes=[];
+  for(const [uid,subject,address]of[[teacher,teacherId,teacherEmail],[pupil,pupilId,pupilEmail]]){
+   await db.query('insert into directory_identities(project,subject,uid) values($1,$2,$3)',[project,subject,uid]);await db.query('insert into directory_school_memberships(uid,school) values($1,$2)',[uid,school]);
+   const b=(await db.query("insert into mailboxes(org,address,label,storage_kind) values($1,$2,$2,'native') returning id",[org,address])).rows[0].id;boxes.push(b);
+   await db.query("insert into directory_mailboxes(box,uid,encrypted_password,ready) values($1,$2,'synthetic-transport-placeholder',true)",[b,uid]);await db.query('insert into grants(uid,box) values($1,$2)',[uid,b]);
+  }
+  const activate=async(user_id,email,relationship,password)=>{
+   for(const operation of ['prepare','activate']){
+    const r=await fetch(base+'/api/integrations/ednevnik/electronic-identity',{method:'POST',headers:{Authorization:'Bearer identity-issuance-token','Content-Type':'application/json'},body:JSON.stringify({operation,user_id,school_id:schoolSource,email,relationship,...(operation==='activate'?{password}:{})})});
+    assert.equal(r.status,200,await r.clone().text());assert.equal((await r.json()).ready,true);
+   }
+  };
+  await activate(teacherId,teacherEmail,'TEACHER',teacherPassword);assert.equal(sourceCalls,0,'nastavnikova lozinka ne mijenja izvorni PIN/autentifikator');
+  await request('/login',{body:{identifier:teacherEmail,password:'12345678'},session:null,status:401});
+  const teacherSession=(await request('/login',{body:{identifier:teacherEmail,password:teacherPassword},session:null})).cookie;
+  assert.deepEqual((await request('/mail/'+boxes[0],{session:teacherSession})).body,[]);await request('/mail/'+boxes[1],{session:teacherSession,status:403});
+  await activate(pupilId,pupilEmail,'STUDENT',pupilPassword);
+  const pupilSession=(await request('/login',{body:{identifier:pupilEmail,password:pupilPassword},session:null})).cookie;
+  assert.deepEqual((await request('/mail/'+boxes[1],{session:pupilSession})).body,[]);await request('/mail/'+boxes[0],{session:pupilSession,status:403});
+  assert.equal((await db.query('select password from users where id=$1',[pupil])).rows[0].password,null);
+ }finally{await new Promise(r=>source.close(r));for(const key of keys){if(previous[key]===undefined)delete process.env[key];else process.env[key]=previous[key];}}
+});
