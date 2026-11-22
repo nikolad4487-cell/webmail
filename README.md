@@ -673,7 +673,11 @@ kao Production secrets; WebmailHR i e-Matica su READY, a školska Edge integraci
 je ACTIVE. Neautentificirani servisni i učenički PDF zahtjevi vraćaju 401.
 Imenik se dohvaća u stranicama od 10 profila i najviše pet paralelnih provjera;
 pogreška izvornog Auth servisa prekida snimku, a uklonjen račun (404) se preskače.
-Početna sinkronizacija je pokrenuta. Stvarnom učeniku nije izdana nova lozinka
+Početna sinkronizacija dovršena je 22. studenoga 2026.: obrađeno je 305 izvornih
+profila, kreirano 298 novih sandučića i povezan jedan postojeći. Jedan sukob
+naziva riješen je numeričkim nastavkom bez prepisivanja postojeće adrese.
+Neaktivni/nepotvrđeni računi ili računi bez odgovarajuće školske veze ne uvoze se.
+Stvarnom učeniku nije izdana nova lozinka
 radi testiranja. Dnevni cron nastavlja jednu stranicu, a administratorski gumb
 obrađuje do 20 stranica po pokretanju. Za trenutačno masovno osvježavanje koristiti
 gumb; novi obiteljski račun može se kreirati i pri uspješnoj izvornoj prijavi.
