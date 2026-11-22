@@ -93,20 +93,24 @@ export function schoolBridge(config:Settings,send:typeof fetch=fetch){
    const schools=await rows('schools','id,name,code,address,city,postal_code,is_active',{limit:'1000'});
    const years=await rows('school_years','id,school_id,ends_at,is_active',{limit:'1000'});
    const people=[];
-   for(const p of profiles){
-    const subject=p.auth_user_id||p.id;if(!uuid(subject))continue;
-    let auth;try{const data=await api('/auth/v1/admin/users/'+subject);auth=data.user??data;}catch{continue;}
-    if(!auth?.email||!auth.email_confirmed_at||auth.is_anonymous||auth.banned_until&&Date.parse(auth.banned_until)>Date.now())continue;
+   // Bound concurrency keeps a roster page inside the server request deadline.
+   for(let offset=0;offset<profiles.length;offset+=5){
+    const batch=await Promise.all(profiles.slice(offset,offset+5).map(async(p:any)=>{
+    const subject=p.auth_user_id||p.id;if(!uuid(subject))return;
+    let auth;try{const data=await api('/auth/v1/admin/users/'+subject);auth=data.user??data;}catch{return;}
+    if(!auth?.email||!auth.email_confirmed_at||auth.is_anonymous||auth.banned_until&&Date.parse(auth.banned_until)>Date.now())return;
     const info=await roleInfo(p);
     const isFamily=info.values.length&&info.values.every(v=>family.has(v)),isStaff=info.values.length&&info.values.every(v=>staff.has(v));
-    if(!isFamily&&!isStaff||info.members.length&&!info.active.length)continue;
+    if(!isFamily&&!isStaff||info.members.length&&!info.active.length)return;
     const memberIds=[...new Set(info.active.map((r:any)=>r.school_id))];
     if(!memberIds.length&&p.school_id)memberIds.push(p.school_id);
     const memberships=schools.filter((s:any)=>memberIds.includes(s.id)&&s.is_active!==false).map((s:any)=>({...s,year_end:years.find((y:any)=>y.id===p.school_year_id&&y.school_id===s.id)?.ends_at||years.find((y:any)=>y.school_id===s.id&&y.is_active)?.ends_at||null}));
-    if(!memberships.length)continue;
+    if(!memberships.length)return;
     const registry=await rows('registry_students','first_name,last_name,oib,date_of_birth,gender,status',{ednevnik_student_id:'eq.'+p.id,limit:'1'});
-    const record=registry[0];if(isFamily&&info.values.includes('STUDENT')&&record&&record.status!=='ACTIVE')continue;
-    people.push({subject,sourceLogin:auth.email,name:!isStaff&&[record?.first_name,record?.last_name].filter(Boolean).join(' ')||p.name||auth.email,kind:isStaff?'teacher':info.values.includes('PARENT')?'parent':'student',oib:record?.oib||p.oib||null,dob:record?.date_of_birth||p.dob||null,gender:record?.gender||p.gender||null,schools:memberships});
+    const record=registry[0];if(isFamily&&info.values.includes('STUDENT')&&record&&record.status!=='ACTIVE')return;
+    return {subject,sourceLogin:auth.email,name:!isStaff&&[record?.first_name,record?.last_name].filter(Boolean).join(' ')||p.name||auth.email,kind:isStaff?'teacher':info.values.includes('PARENT')?'parent':'student',oib:record?.oib||p.oib||null,dob:record?.date_of_birth||p.dob||null,gender:record?.gender||p.gender||null,schools:memberships};
+    }));
+    people.push(...batch.filter(Boolean));
    }
    return reply(200,{project:new URL(config.url).hostname.split('.')[0],people,nextPage:body.action==='roster'&&profiles.length===30?page+1:null});
   }catch(error){const status=(error as {status?:number}).status||503;return reply(status,{error:status===401?'Prijava nije ispravna.':'Postupak nije potvrđen. Pokušajte ponovno.'});}
