@@ -88,7 +88,7 @@ export function schoolBridge(config:Settings,send:typeof fetch=fetch){
    if(!['roster','roster-person'].includes(body.action)||!service||origin)return reply(403,{error:'Servisni pristup je obavezan.'});
    const page=body.page??0;if(!Number.isSafeInteger(page)||page<0||page>100000)return reply(400,{error:'Neispravna stranica.'});
    if(body.action==='roster-person'&&!uuid(body.subject))return reply(400,{error:'Neispravan identitet.'});
-   let profiles=await rows('user_profiles','id,auth_user_id,email,name,role,access_role,school_id,oib,dob,gender,school_year_id',body.action==='roster-person'?{auth_user_id:'eq.'+body.subject,limit:'2'}:{order:'id',limit:'30',offset:String(page*30)});
+   let profiles=await rows('user_profiles','id,auth_user_id,email,name,role,access_role,school_id,oib,dob,gender,school_year_id',body.action==='roster-person'?{auth_user_id:'eq.'+body.subject,limit:'2'}:{order:'id',limit:'10',offset:String(page*10)});
    if(body.action==='roster-person'&&!profiles.length)profiles=await rows('user_profiles','id,auth_user_id,email,name,role,access_role,school_id,oib,dob,gender,school_year_id',{id:'eq.'+body.subject,limit:'1'});
    const schools=await rows('schools','id,name,code,address,city,postal_code,is_active',{limit:'1000'});
    const years=await rows('school_years','id,school_id,ends_at,is_active',{limit:'1000'});
@@ -112,7 +112,7 @@ export function schoolBridge(config:Settings,send:typeof fetch=fetch){
     }));
     people.push(...batch.filter(Boolean));
    }
-   return reply(200,{project:new URL(config.url).hostname.split('.')[0],people,nextPage:body.action==='roster'&&profiles.length===30?page+1:null});
+   return reply(200,{project:new URL(config.url).hostname.split('.')[0],people,nextPage:body.action==='roster'&&profiles.length===10?page+1:null});
   }catch(error){const status=(error as {status?:number}).status||503;return reply(status,{error:status===401?'Prijava nije ispravna.':'Postupak nije potvrđen. Pokušajte ponovno.'});}
  };
 }
