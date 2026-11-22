@@ -1,5 +1,6 @@
 import {PDFDocument,rgb} from 'pdf-lib';
 import fontkit from '@pdf-lib/fontkit';
+import {schoolAddress} from './school-address.mjs';
 export async function schoolCredentialPdf(data,fonts){
  const pdf=await PDFDocument.create();pdf.registerFontkit(fontkit);
  const regular=await pdf.embedFont(fonts.regular),bold=await pdf.embedFont(fonts.bold);
@@ -26,8 +27,8 @@ export async function schoolCredentialPdf(data,fonts){
  y-=9;page.drawLine({start:{x:33,y},end:{x:562,y},thickness:.5,color:rgb(.65,.65,.65)});y-=29;
  row('Povezanost s ustanovom',kind);row('Temeljna povezanost s ustanovom',kind);row('Datum isteka povezanosti',date(data.validUntil));
  y-=14;page.drawLine({start:{x:33,y},end:{x:562,y},thickness:.5,color:rgb(.65,.65,.65)});y-=30;
- const school=data.school||{};
- row('Naziv matične ustanove',school.name);row('Oznaka matične ustanove',school.code||school.sourceId||school.id);row('Poštanska adresa',school.address);row('Mjesto (lokalitet)',school.city?('HR-'+school.city):null);row('Poštanski broj',school.postal_code?('HR-'+school.postal_code):null);
+ const school=data.school||{},location=schoolAddress(school);
+ row('Naziv matične ustanove',school.name);row('Oznaka matične ustanove',school.code||school.sourceId||school.id);row('Poštanska adresa',location.address);row('Mjesto (lokalitet)',location.city?('HR-'+location.city):null);row('Poštanski broj',location.postal?('HR-'+location.postal):null);
  page.drawLine({start:{x:33,y:116},end:{x:562,y:116},thickness:.5,color:rgb(.65,.65,.65)});
  text('Podaci za prijavu',50,93,10,bold);text('WebmailHR: https://www.webmailhr.com/',50,76,9);
  text(data.kind==='teacher'?'Lozinku za mail možete promijeniti u postavkama WebmailHR profila.':data.kind==='parent'?'Za promjenu roditeljske lozinke obratite se administratoru ustanove.':'Nova učenička lozinka izdaje se u e-Matici. U WebmailHR-u se ne mijenja.',50,60,8);
