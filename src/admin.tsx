@@ -59,7 +59,7 @@ export function Admin({session}:{session:Session}){
       values[field.key]=field.type==='check'?data.has(field.key):field.type==='number'||field.type==='school'?(value?Number(value):null):value||null;
     }
     if(section==='users' && kind!=='local')values.recovery=null;
-    try{await api('/admin/'+section,'POST',values);setEdit(undefined);await load();if(section==='users'&&kind==='staff'&&editPassword){const list=await api<RecordRow[]>('/admin/users');const saved=list.find(row=>row.email===values.email);if(saved){setPinUser(String(saved.email).endsWith('@skolehr.xyz')?Number(saved.id):undefined);setPin(editPassword);}}}catch(e){setError(toError(e));}
+    try{await api('/admin/'+section,'POST',values);setEdit(undefined);await load();if(section==='users'&&kind==='staff'&&editPassword){const list=await api<RecordRow[]>('/admin/users');const saved=list.find(row=>row.email===values.email);if(saved){setPinUser(String(saved.email).endsWith('@skolehr.xyz')?Number(saved.id):undefined);setPin(editPassword);setEditPassword('');}}}catch(e){setError(toError(e));}
   }
   function showField(field:Field){
     if(section==='domains'&&field.key==='mailbox_backend')return root;
@@ -73,7 +73,8 @@ export function Admin({session}:{session:Session}){
   useEffect(()=>{if(!pin)return;const clear=()=>{if(document.visibilityState==='hidden'){setPin(undefined);setPinUser(undefined);}};const timer=setTimeout(()=>{setPin(undefined);setPinUser(undefined);},300000);document.addEventListener('visibilitychange',clear);return()=>{clearTimeout(timer);document.removeEventListener('visibilitychange',clear);};},[pin]);
   async function rotatePin(row:RecordRow){
     setRotating(true);setError('');
-    try{setPinUser(String(row.email).endsWith('@skolehr.xyz')?Number(row.id):undefined);setPin((await api<{password:string}>('/admin/users/'+row.id+(row.auth_kind==='ednevnik'?'/student-password':'/password'),'POST')).password);}
+    setPin(undefined);setPinUser(undefined);
+    try{const issued=await api<{password:string}>('/admin/users/'+row.id+(row.auth_kind==='ednevnik'?'/student-password':'/password'),'POST');setPinUser(String(row.email).endsWith('@skolehr.xyz')?Number(row.id):undefined);setPin(issued.password);}
     catch(e){setError(toError(e));}finally{setRotating(false);}
   }
   async function schoolSync(){setSchoolSyncBusy(true);setError('');let count=0,conflicts=0;try{for(let page=0;page<20;page++){const r=await api<{created:number;existing:number;conflicts:number;hasMore:boolean}>('/admin/schools/sync','POST');count+=r.created;conflicts+=r.conflicts;if(!r.hasMore)break;}setNotice(`Školska sinkronizacija: novih sandučića ${count}, zapisa za provjeru ${conflicts}.`);await load();}catch(e){setError(toError(e));}finally{setSchoolSyncBusy(false);}}
