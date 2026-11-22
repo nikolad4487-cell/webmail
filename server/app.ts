@@ -200,7 +200,7 @@ setupAutomation(api);
 api.use(async (req,_res,next)=>{
   const key=session(req);
   if(!key) throw new HttpError(401,'Prijavite se za nastavak.');
-  const {rows:[account]}=await db.query(`select u.id,u.org,u.school,u.email,u.name,u.role,u.auth_kind,(u.auth_kind='formapoint' and u.source_project is not null and u.source_user_id is not null and u.source_email is not null) as shared_password from users u join sessions s on s.uid=u.id where s.token=$1 and s.expires>now() and u.active and (u.auth_kind<>'local' or ${localAccount})`,[digest(key),demo]);
+  const {rows:[account]}=await db.query(`select u.id,u.org,u.school,u.email,u.name,u.role,u.auth_kind,exists(select 1 from school_mail_identities si where si.uid=u.id and si.person_kind='student' and si.subject=u.source_user_id and not si.disabled_by_sync) as student_password,(u.auth_kind='formapoint' and u.source_project is not null and u.source_user_id is not null and u.source_email is not null) as shared_password from users u join sessions s on s.uid=u.id where s.token=$1 and s.expires>now() and u.active and (u.auth_kind<>'local' or ${localAccount})`,[digest(key),demo]);
   if(!account || (adminOrigin && (account.role==='root')!==isAdminSite(req))) throw new HttpError(401,'Sesija je istekla.');
   Object.assign(req,{account}); next();
 });
@@ -209,18 +209,25 @@ api.post('/account/password',async(req,res)=>{
   await limit('password:'+a.id,8);
   const input=z.object({currentPassword:z.string().min(1).max(512),newPassword}).strict().parse(req.body);
   const {rows:[account]}=await db.query('select * from users where id=$1 and active',[a.id]);
-  if(!account || !['staff','formapoint','local'].includes(account.auth_kind))return deny();
+  if(!account || !['staff','formapoint','local','ednevnik'].includes(account.auth_kind))return deny();
+  const pupil=account.auth_kind==='ednevnik';
+  const binding=pupil?(await db.query("select source_login from school_mail_identities where uid=$1 and subject=$2 and person_kind='student' and not disabled_by_sync",[account.id,account.source_user_id])).rows[0]:null;
+  if(pupil&&(!binding||account.source_project!==process.env.EDNEVNIK_SUPABASE_PROJECT_ID))return deny();
   const shared=isLinkedFormaPoint(account);
   if(shared)sharedPassword.parse(input.newPassword);
-  if(!shared&&!await verifyCurrentPassword(account,input.currentPassword))throw invalidLogin();
+  if(!shared&&!pupil&&!await verifyCurrentPassword(account,input.currentPassword))throw invalidLogin();
   if(input.currentPassword===input.newPassword)throw new HttpError(400,'Odaberite drukčiju novu lozinku.');
-  const hash=shared?null:await hashPassword(input.newPassword);
+  const hash=shared||pupil?null:await hashPassword(input.newPassword);
   await transaction(async c=>{
     const {rows:[current]}=await c.query('select * from users where id=$1 and active for update',[a.id]);
     if(!current || current.password!==account.password || current.password_scheme!==account.password_scheme ||
       current.auth_kind!==account.auth_kind || current.source_project!==account.source_project ||
       current.source_user_id!==account.source_user_id || current.source_email!==account.source_email ||
       !(await c.query('select 1 from sessions where token=$1 and uid=$2 and expires>now()',[digest(session(req)!),a.id])).rowCount)throw new HttpError(401,'Sesija je istekla. Prijavite se ponovno.');
+    if(pupil){
+      const result=await schoolSource({action:'student-change-password',subject:current.source_user_id,username:binding.source_login,currentPassword:input.currentPassword,newPassword:input.newPassword});
+      if(!result.ok||result.user_id!==current.source_user_id)throw new HttpError(503,'Nova lozinka nije potvrđena u e-Dnevniku.');
+    }
     if(shared)await changeFormaPointPassword(current.source_email,input.currentPassword,input.newPassword,{projectId:current.source_project,userId:current.source_user_id});
     await c.query("update users set password=$2,password_scheme='scrypt' where id=$1",[a.id,hash]);
     await c.query('update school_mail_identities set initial_password=null where uid=$1',[a.id]);

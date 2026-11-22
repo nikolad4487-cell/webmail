@@ -8,6 +8,7 @@ function bridge({scope='school-1',targetKind='STUDENT',authStatus=200}={}){
  const mutations=[];
  const send=async(url,options)=>{
   const u=new URL(url),path=u.pathname;
+  if(path==='/auth/v1/token')return Response.json({user:{id:subject}});
   if(path==='/auth/v1/user')return options.headers.Authorization==='Bearer user-jwt'?Response.json({id:actor,email:'school-admin@example.test'}):new Response('{}',{status:401});
   if(path.startsWith('/auth/v1/admin/users/')&&options.method==='PUT'){mutations.push(JSON.parse(options.body));return Response.json({id:subject});}
   if(path.startsWith('/auth/v1/admin/users/')&&options.method==='GET')return authStatus===200?Response.json({id:subject,email:'luka@example.test',email_confirmed_at:'2026-01-01'}):new Response('{}',{status:authStatus});
@@ -41,4 +42,32 @@ test('Reading student print metadata does not issue a password',async()=>{
 test('Roster distinguishes removed accounts from source outages',async()=>{
  for(const status of [401,429,500]){const {handler}=bridge({authStatus:status});assert.notEqual((await request(handler,secret,'roster')).status,200);}
  const {handler}=bridge({authStatus:404});const response=await request(handler,secret,'roster');assert.equal(response.status,200);assert.deepEqual((await response.json()).people,[]);
+});
+test('Pupil self-change requires current source password and exact student identity; staff/PIN remain untouched',async()=>{
+ for(const kind of ['STUDENT','TEACHER','PARENT']){
+  let password='Beforepwd1';const writes=[];
+  const handler=schoolBridge({url:'https://source.test',key:'server-only',tokenHash:createHash('sha256').update(secret).digest('hex'),origins:[]},async(url,options)=>{
+   const path=new URL(url).pathname,body=options.body?JSON.parse(options.body):null;
+   if(path==='/rest/v1/user_profiles')return Response.json([{id:profile,auth_user_id:subject,email:'pupil@source.test',role:kind}]);
+   if(path==='/rest/v1/user_school_roles')return Response.json([{school_id:'school-1',role:kind,status:'ACTIVE'}]);
+   if(path==='/auth/v1/token')return body.password===password?Response.json({user:{id:subject},access_token:'pupil-session'}):Response.json({}, {status:400});
+   if(path==='/auth/v1/user'&&options.method==='PUT'){assert.equal(options.headers.Authorization,'Bearer pupil-session');writes.push(body);password=body.password;return Response.json({id:subject});}
+   throw Error('Unexpected '+path);
+  });
+  const change=(currentPassword,token=secret)=>handler(new Request('https://source.test/bridge',{method:'POST',headers:{Authorization:'Bearer '+token},body:JSON.stringify({action:'student-change-password',subject,username:'pupil@source.test',currentPassword,newPassword:'Afterpwd2'})}));
+  assert.equal((await change('Beforepwd1','wrong')).status,403);assert.equal(writes.length,0);
+  if(kind!=='STUDENT'){assert.equal((await change('Beforepwd1')).status,403);assert.deepEqual(writes,[]);continue;}
+  assert.equal((await change('wrong')).status,401);assert.deepEqual(writes,[]);
+  assert.equal((await change('Beforepwd1')).status,200);assert.deepEqual(writes,[{password:'Afterpwd2'}]);assert.equal(password,'Afterpwd2');
+ }
+});
+
+test('Webmail service issuance is limited to the exact active pupil and school',async()=>{
+ for(const settings of [{targetKind:'TEACHER'},{targetKind:'PARENT'},{}]){
+  const {handler,mutations}=bridge(settings);
+  const call=schoolId=>handler(new Request('https://school.example.test/bridge',{method:'POST',headers:{Authorization:'Bearer '+secret},body:JSON.stringify({action:'webmail-issue-student-password',subject,schoolId})}));
+  assert.equal((await call('foreign-school')).status,403);assert.deepEqual(mutations,[]);
+  const response=await call('school-1');
+  if(settings.targetKind){assert.equal(response.status,403);assert.deepEqual(mutations,[]);}else{assert.equal(response.status,200);const result=await response.json();assert.deepEqual(mutations,[{password:result.credential.password}]);assert.match(result.credential.password,/^[a-zA-Z0-9]{8}$/);}
+ }
 });

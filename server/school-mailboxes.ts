@@ -146,19 +146,38 @@ const fonts=()=>Promise.all([readFile(new URL('../assets/fonts/NotoSans-Regular.
 export async function credentialPdf(data:Record<string,unknown>){const [regular,bold]=await fonts();return Buffer.from(await schoolCredentialPdf({...data,...(typeof data.name==='string'?{name:schoolIdentityName(data.name)}:{})},{regular,bold}));}
 function pdfResponse(res:Response,bytes:Buffer){res.set({'Content-Type':'application/pdf','Content-Disposition':'attachment; filename="skolehr-podaci-za-prijavu.pdf"','Cache-Control':'no-store'}).send(bytes);}
 export function setupSchoolAdmin(api:Router){
+ api.post('/admin/users/:id/student-password',async(req,res)=>{
+  const actor=user(req),uid=z.coerce.number().int().positive().parse(req.params.id);
+  const {rows:[u]}=await db.query(`select u.*,si.project,si.subject,ds.subject as source_school,si.source_login
+   from users u join school_mail_identities si on si.uid=u.id
+   join directory_schools ds on ds.school=u.school and ds.project=si.project
+   join directory_school_memberships sm on sm.uid=u.id and sm.school=u.school
+   where u.id=$1 and u.active and u.auth_kind='ednevnik' and si.person_kind='student' and not si.disabled_by_sync`,[uid]);
+  if(!u||u.role!=='user'||actor.role!=='root'&&(actor.role!=='admin'||actor.org!==u.org||actor.school&&actor.school!==u.school))return deny();
+  if(u.project!==process.env.EDNEVNIK_SUPABASE_PROJECT_ID||u.subject!==u.source_user_id)return deny();
+  await transaction(async c=>{
+   const {rows:[current]}=await c.query('select * from users where id=$1 and active for update',[uid]);
+   if(!current||current.org!==u.org||current.school!==u.school||current.source_user_id!==u.subject||current.source_project!==u.project||current.auth_kind!=='ednevnik'||current.role!=='user')return deny();
+   const source=await schoolSource({action:'webmail-issue-student-password',subject:u.subject,schoolId:u.source_school});
+   const password=source.credential?.password;
+   if(source.credential?.subject!==u.subject||typeof password!=='string')throw new HttpError(503,'Nova lozinka nije potvrđena.');
+   await c.query('delete from sessions where uid=$1',[uid]);await c.query('delete from resets where uid=$1',[uid]);
+   await c.query('update school_mail_identities set initial_password=null where uid=$1',[uid]);
+   await c.query("insert into audits(uid,action,target) values($1,'school.student.password.issue',$2)",[actor.id,String(uid)]);
+   res.locals.issued=password;
+  });
+  res.set('Cache-Control','no-store').json({password:res.locals.issued});
+ });
  api.post('/admin/schools/sync',async(req,res)=>{if(user(req).role!=='root')return deny();res.json(await syncSchools());});
  const download=async(req:import('express').Request,res:Response)=>{
   const actor=user(req),uid=z.coerce.number().int().positive().parse(req.params.id);
-  const {rows:[u]}=await db.query(`select u.*,s.person_kind,s.oib,s.dob::text,s.gender,s.valid_until::text,s.school_data,s.initial_password,s.issued_at
+  const {rows:[u]}=await db.query(`select u.*,s.person_kind,s.source_login,s.oib,s.dob::text,s.gender,s.valid_until::text,s.school_data,s.initial_password,s.issued_at
    from users u left join school_mail_identities s on s.uid=u.id where u.id=$1 and u.active`,[uid]);
   if(!u||actor.role!=='root'&&(actor.role!=='admin'||u.org!==actor.org||u.role!=='user'||actor.school&&u.school!==actor.school))return deny();
   if(!u.email.endsWith('@skolehr.xyz')||!['staff','ednevnik'].includes(u.auth_kind))throw new HttpError(409,'Ovo nije školski mail račun.');
   let password;
-  if(req.method==='POST'){const input=z.object({password:z.string().min(8).max(512)}).strict().parse(req.body);if(u.auth_kind!=='staff'||!await verifyPassword(input.password,u.password))return deny();password=input.password;}
-  if(!password&&u.auth_kind==='staff'&&u.initial_password&&Date.now()-new Date(u.issued_at).getTime()<7*86400000){
-   password=openMailboxPassword(u.email,u.initial_password);if(!await verifyPassword(password,u.password))password=undefined;
-  }
-  if(u.auth_kind==='staff'&&!password)throw new HttpError(409,'Nova lozinka nije dostupna za ispis. Izdajte novu lozinku za mail.');
+  if(req.method==='POST'){const input=z.object({password:z.string().min(8).max(512)}).strict().parse(req.body);if(u.auth_kind==='staff'){if(!await verifyPassword(input.password,u.password))return deny();}else{const confirmed=await schoolSource({action:'family-login',username:u.source_login||u.email,password:input.password});if(confirmed.user_id!==u.source_user_id)return deny();}password=input.password;}
+  if(!password)throw new HttpError(409,'PDF s lozinkom preuzmite tijekom izdavanja nove lozinke.');
   const bytes=await credentialPdf({name:u.name,address:u.email,kind:u.auth_kind==='staff'?'teacher':u.person_kind||'student',oib:u.oib,dob:u.dob,gender:u.gender,validUntil:u.valid_until,school:u.school_data,password});
   await db.query("insert into audits(uid,action,target) values($1,'school.credentials.pdf',$2)",[actor.id,String(uid)]);pdfResponse(res,bytes);
  };

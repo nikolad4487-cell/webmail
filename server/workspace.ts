@@ -204,12 +204,11 @@ export function setupData(api:Router){
     const password=input.password??generateSchoolPassword();
     await transaction(async c=>{
       const {rows:[account]}=await c.query('select * from users where id=$1 for update',[uid]);
-      if(!account || (a.role!=='root' && (account.org!==a.org || account.role!=='user')))return deny();
-      if(account.identity_password)throw new HttpError(409,'Novu lozinku izdajte u e-Matici.');
+      if(!account || (a.role!=='root' && (account.org!==a.org || account.role!=='user' || !!a.school&&account.school!==a.school)))return deny();
       if(!['staff','formapoint'].includes(account.auth_kind))throw new HttpError(409,'Lozinku dodjeljujete djelatnicima i FormaPoint korisnicima.');
       if(account.auth_kind==='formapoint'&&account.source_user_id)throw new HttpError(409,'Povezani račun koristi zajedničku FormaPoint lozinku. Korisnik je mijenja u profilu.');
       await c.query("update users set password=$2,password_scheme='scrypt' where id=$1",[uid,await hashPassword(password)]);
-      if(account.auth_kind==='staff')await c.query('update school_mail_identities set initial_password=$2,issued_at=now() where uid=$1',[uid,(await import('./mailbox-secrets.js')).sealMailboxPassword(account.email,password)]);
+      if(account.auth_kind==='staff')await c.query('update school_mail_identities set initial_password=null,issued_at=now() where uid=$1',[uid]);
       await c.query('delete from sessions where uid=$1',[uid]);
       await c.query('delete from resets where uid=$1',[uid]);
       for(const address of [account.email,account.source_email].filter(Boolean))await c.query('delete from login_limits where key=$1',[digest('login:'+address)]);
