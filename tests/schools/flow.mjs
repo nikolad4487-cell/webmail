@@ -117,3 +117,28 @@ test('A school role change stops the previous mail identity until administrator 
  assert.equal((await db.query('select active from users where id=$1',[record.uid])).rows[0].active,false);
  assert.equal((await db.query('select initial_password from school_mail_identities where uid=$1',[record.uid])).rows[0].initial_password,null);
 });
+
+test('Malformed imported names and mailbox addresses repair in place without losing credentials or mail',async()=>{
+ const raw='Fran Tomić | fran.tomic@skolehr.xyz';
+ const p=person('teacher',raw,'frantomicfrantomicskolehrxyz@eskole.me');
+ const first=await syncPerson(p,'clean-new');assert.equal(first.address,'fran.tomic@skolehr.xyz');
+ const {openMailboxPassword,sealMailboxPassword}=await import('../../server/mailbox-secrets.ts');
+ const original=(await db.query('select u.password,s.initial_password from users u join school_mail_identities s on s.uid=u.id where u.id=$1',[first.uid])).rows[0];
+ const password=openMailboxPassword(first.address,original.initial_password),old='frantomicfrantomicskolehrxyz@skolehr.xyz';
+ const box=(await db.query('select id from mailboxes where address=$1',[first.address])).rows[0].id;
+ await db.query('update users set email=$2,name=$3 where id=$1',[first.uid,old,raw]);
+ await db.query('update mailboxes set address=$2,label=$3 where id=$1',[box,old,raw]);
+ await db.query('update school_mail_identities set initial_password=$2 where uid=$1',[first.uid,sealMailboxPassword(old,password)]);
+ const message=(await db.query("insert into native_messages(box,path,raw,subject,text_body,sent_at,bytes) values($1,'INBOX',$2,'Preserved','Body',now(),4) returning id",[box,Buffer.from('mail')])).rows[0].id;
+ await db.query("insert into native_attachments values($1,0,'file.txt','text/plain',$2)",[message,Buffer.from('attachment')]);
+ const repaired=await syncPerson(p,'repair');assert.equal(repaired.uid,first.uid);assert.equal(repaired.created,false);assert.equal(repaired.address,'fran.tomic@skolehr.xyz');
+ const after=(await db.query('select u.*,s.initial_password,s.source_login from users u join school_mail_identities s on s.uid=u.id where u.id=$1',[first.uid])).rows[0];
+ assert.equal(after.name,'Fran Tomić');assert.equal(after.password,original.password);assert.equal(after.source_login,p.sourceLogin);assert.equal(openMailboxPassword(repaired.address,after.initial_password),password);
+ const saved=(await db.query('select * from mailboxes where id=$1',[box])).rows[0];assert.equal(saved.address,repaired.address);assert.equal(saved.label,'Fran Tomić');
+ assert.equal((await db.query('select box from native_messages where id=$1',[message])).rows[0].box,box);
+ assert.equal((await db.query('select content from native_attachments where message=$1',[message])).rows[0].content.toString(),'attachment');
+ assert.ok((await db.query('select 1 from grants where uid=$1 and box=$2',[first.uid,box])).rowCount);
+ const repeated=await syncPerson(p,'repeat');assert.equal(repeated.address,repaired.address);
+ const duplicate=await syncPerson(person('student',raw,'other@source.test'),'collision');assert.equal(duplicate.address,'fran.tomic2@skolehr.xyz');
+ const inspection=await (await request('/integrations/schools/sync?inspectNames=1',{cookie:null,token:process.env.CRON_SECRET})).json();assert.ok(inspection.users.some(u=>u.id===first.uid&&u.name==='Fran Tomić'&&u.mailbox_label==='Fran Tomić'));
+});

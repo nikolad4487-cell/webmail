@@ -11,6 +11,7 @@ import {requireNativeSetup} from './mailbox-provisioning.js';
 import {generateSchoolPassword} from './school-password.js';
 import {sealMailboxPassword,openMailboxPassword} from './mailbox-secrets.js';
 import {schoolCredentialPdf} from '../shared/school-credential.mjs';
+import {schoolIdentityName,malformedSchoolAddress} from './school-identity-name.js';
 const school=z.object({id:z.string().min(1).max(200),name:z.string().min(1).max(240),code:z.string().nullish(),address:z.string().nullish(),city:z.string().nullish(),postal_code:z.string().nullish(),year_end:z.string().nullish()});
 class SchoolRoleConflict extends HttpError{constructor(readonly uid:number){super(409,'Promjena vrste školskog računa zahtijeva provjeru. Pristup starog računa je zaustavljen.');}}
 export const schoolPerson=z.object({subject:z.uuid(),sourceLogin:z.email(),name:z.string().min(1).max(240),kind:z.enum(['student','parent','teacher']),oib:z.string().nullish(),dob:z.string().nullish(),gender:z.string().nullish(),schools:z.array(school).min(1).max(30)});
@@ -28,7 +29,7 @@ export async function schoolSource(body:object,token?:string){
  return response.json();
 }
 export async function syncSchoolPerson(input:unknown,run:string){
- const p=schoolPerson.parse(input),cfg=config();requireNativeSetup();
+ const p=schoolPerson.parse(input),rawName=p.name,cfg=config();p.name=schoolIdentityName(p.name);requireNativeSetup();
  return transaction(async c=>{
   await c.query('select pg_advisory_xact_lock(hashtextextended($1,0))',['identity:'+cfg.project+':'+p.subject]);
   const {rows:[domain]}=await c.query("select org from domains where name='skolehr.xyz' and mailbox_backend='native' and inbound and outbound");
@@ -42,7 +43,24 @@ export async function syncSchoolPerson(input:unknown,run:string){
   if(!bound&&kind==='staff'&&p.sourceLogin.endsWith('@skolehr.xyz')){const {rows:[legacy]}=await c.query("select u.* from users u where u.email=$1 and u.auth_kind='staff' and u.role='user' and not exists(select 1 from directory_identities d where d.uid=u.id)",[p.sourceLogin]);if(legacy)bound=legacy;}
   if(bound&&bound.role!=='root'&&bound.auth_kind!==kind)throw new SchoolRoleConflict(bound.id);
   if(bound&&(bound.org!==domain.org||bound.auth_kind!==kind||bound.role==='root'||!bound.active&&!bound.disabled_by_sync))throw new HttpError(409,'Postojeći račun zahtijeva administratorsku provjeru.');
-  const address=bound?.email??await allocateFormaPointAddress(c,'skolehr.xyz',p.sourceLogin,p.subject,p.name,{preserveSourceAddress:false});
+  let address=bound?.email??await allocateFormaPointAddress(c,'skolehr.xyz',p.sourceLogin,p.subject,p.name,{preserveSourceAddress:false});
+  if(bound&&malformedSchoolAddress(bound.email,rawName)){
+   const {rows:[owned]}=await c.query('select * from mailboxes where address=$1 for update',[bound.email]);
+   if(!owned||owned.org!==bound.org||owned.shared||owned.storage_kind!=='native'||
+    !(await c.query('select 1 from grants where box=$1 and uid=$2',[owned.id,bound.id])).rowCount||
+    (await c.query('select 1 from grants where box=$1 and uid<>$2',[owned.id,bound.id])).rowCount||
+    (await c.query('select 1 from senders where address=$1 or reply_to=$1',[bound.email])).rowCount)throw new HttpError(409,'Oznaku postojećeg sandučića mora provjeriti administrator.');
+   address=await allocateFormaPointAddress(c,'skolehr.xyz',p.sourceLogin,p.subject,p.name,{preserveSourceAddress:false});
+   const {rows:[initial]}=await c.query('select initial_password from school_mail_identities where uid=$1',[bound.id]);
+   if(initial?.initial_password)await c.query('update school_mail_identities set initial_password=$2 where uid=$1',[bound.id,sealMailboxPassword(address,openMailboxPassword(bound.email,initial.initial_password))]);
+   const {rows:[legacy]}=await c.query('select encrypted_password from directory_mailboxes where uid=$1',[bound.id]);
+   if(legacy)await c.query('update directory_mailboxes set encrypted_password=$2 where uid=$1',[bound.id,sealMailboxPassword(address,openMailboxPassword(bound.email,legacy.encrypted_password))]);
+   await c.query('update users set email=$2 where id=$1',[bound.id,address]);
+   await c.query('update mailboxes set address=$2,label=$3 where id=$1',[owned.id,address,p.name]);
+   await c.query('delete from sessions where uid=$1',[bound.id]);
+   await c.query("insert into audits(uid,action,target) values($1,'school.identity.label.repair',$2)",[bound.id,address]);
+   bound.email=address;
+  }
   const memberships=[];
   for(const s of p.schools){
    const old=(await c.query('select school from directory_schools where project=$1 and subject=$2',[cfg.project,s.id])).rows[0];
@@ -70,6 +88,7 @@ export async function syncSchoolPerson(input:unknown,run:string){
   if(box){
    if(box.org!==domain.org||box.shared||!box.active&&!bound?.disabled_by_sync||box.storage_kind!=='native'||(await c.query('select 1 from grants where box=$1 and uid<>$2',[box.id,uid])).rowCount)throw new HttpError(409,'Postojeći sandučić nije potvrđen osobni native sandučić.');
    if(bound?.disabled_by_sync)await c.query('update mailboxes set active=true where id=$1',[box.id]);
+   if(schoolIdentityName(rawName)!==rawName||schoolIdentityName(box.label)!==box.label||malformedSchoolAddress(box.label,rawName))await c.query('update mailboxes set label=$2 where id=$1',[box.id,p.name]);
   }else box=(await c.query("insert into mailboxes(org,address,label,storage_kind) values($1,$2,$3,'native') returning *",[domain.org,address,p.name])).rows[0];
   await c.query('insert into grants values($1,$2,true,true) on conflict(uid,box) do nothing',[uid,box.id]);
   const end=p.schools.map(s=>s.year_end).filter((v):v is string=>!!v&&/^\d{4}-\d{2}-\d{2}$/.test(v)).sort().at(-1);
@@ -124,7 +143,7 @@ async function runSchoolSync(){
  return {created,existing,conflicts,conflictDetails,hasMore:data.nextPage!==null};
 }
 const fonts=()=>Promise.all([readFile(new URL('../assets/fonts/NotoSans-Regular.ttf',import.meta.url)),readFile(new URL('../assets/fonts/NotoSans-Bold.ttf',import.meta.url))]);
-export async function credentialPdf(data:Record<string,unknown>){const [regular,bold]=await fonts();return Buffer.from(await schoolCredentialPdf(data,{regular,bold}));}
+export async function credentialPdf(data:Record<string,unknown>){const [regular,bold]=await fonts();return Buffer.from(await schoolCredentialPdf({...data,...(typeof data.name==='string'?{name:schoolIdentityName(data.name)}:{})},{regular,bold}));}
 function pdfResponse(res:Response,bytes:Buffer){res.set({'Content-Type':'application/pdf','Content-Disposition':'attachment; filename="skolehr-podaci-za-prijavu.pdf"','Cache-Control':'no-store'}).send(bytes);}
 export function setupSchoolAdmin(api:Router){
  api.post('/admin/schools/sync',async(req,res)=>{if(user(req).role!=='root')return deny();res.json(await syncSchools());});
@@ -172,6 +191,13 @@ export function setupSchoolEndpoints(app:Express,allowedHost:(host:string)=>bool
  app.get('/api/integrations/schools/sync',async(req,res)=>{
   if(!allowedHost(req.get('host')?.toLowerCase()||'')||req.get('origin'))return deny();
   const secret=process.env.CRON_SECRET;if(!secret||req.get('authorization')!=='Bearer '+secret)throw new HttpError(401,'Neispravan servisni zahtjev.');
+  if(req.query.inspectNames==='1'){
+   const {rows}=await db.query(`select u.id,u.name,u.email,u.auth_kind,u.active,s.subject,
+    m.id as box,m.address as mailbox_address,m.label as mailbox_label,m.storage_kind
+    from users u left join school_mail_identities s on s.uid=u.id
+    left join mailboxes m on m.address=u.email and m.org=u.org order by u.id`);
+   res.set('Cache-Control','no-store');return res.json({users:rows});
+  }
   if(req.query.subject!==undefined){
    const subject=z.uuid().parse(req.query.subject);
    const data=await schoolSource({action:'roster-person',subject});
