@@ -1,7 +1,8 @@
 import {useEffect,useState,type FormEvent} from 'react';
-import {Building2,ClipboardList,Globe,Inbox,KeyRound,Pencil,Plus,School,Search,Send,UsersRound,X} from 'lucide-react';
+import {Building2,ClipboardList,Globe,Inbox,KeyRound,Eye,EyeOff,Pencil,Plus,School,Search,Send,UsersRound,X} from 'lucide-react';
 import {api,toError,type Session} from './api';
 import {accountKinds,usesUsername,type AccountKind} from './account-kinds';
+import cloudflareWorker from '../cloudflare/email-worker.mjs?raw';
 type RecordRow=Record<string,string|number|boolean|null>;
 type Field={key:string;label:string;type?:string;options?:[string,string][];optional?:boolean};
 const active={key:'active',label:'Aktivno',type:'check'};
@@ -10,8 +11,8 @@ const name={key:'name',label:'Naziv'};
 const sections={
   organizations:{label:'Organizacije',icon:Building2,fields:[name]},
   schools:{label:'Škole i ustanove',icon:School,fields:[name]},
-  domains:{label:'Domene',icon:Globe,fields:[{key:'name',label:'Domena'},{key:'inbound',label:'IMAP / primanje',type:'check'},{key:'outbound',label:'SMTP / slanje',type:'check'}]},
-  users:{label:'Korisnici',icon:UsersRound,fields:[name,{...address,key:'email'},{key:'school',label:'Škola ili ustanova',type:'school',optional:true},{key:'role',label:'Uloga',options:[['user','Korisnik'],['admin','Administrator organizacije'],['root','Glavni administrator']] as [string,string][]},active,{key:'auth_kind',label:'Vrsta računa',options:accountKinds.map(([key,label]):[string,string]=>[key,label])},{key:'source_user_id',label:'Stabilni ID korisnika',optional:true},{key:'source_email',label:'E-mail u FormaPoint Supabase Authu',type:'email'},{key:'recovery',label:'Potvrđena adresa za oporavak',type:'email',optional:true},{key:'password',label:'Lozinka',type:'password'}]},
+  domains:{label:'Domene',icon:Globe,fields:[{key:'name',label:'Domena'},{key:'inbound',label:'Primanje',type:'check'},{key:'outbound',label:'Slanje',type:'check'},{key:'mailbox_backend',label:'Novi osobni sandučići',options:[['imap','Postojeći IMAP / SMTP servis'],['native','Cloudflare / Mailjet']] as [string,string][]}]},
+  users:{label:'Korisnici',icon:UsersRound,fields:[name,{...address,key:'email'},{key:'school',label:'Škola ili ustanova',type:'school',optional:true},{key:'role',label:'Uloga',options:[['user','Korisnik'],['admin','Administrator organizacije'],['root','Glavni administrator']] as [string,string][]},active,{key:'auth_kind',label:'Vrsta računa',options:accountKinds.map(([key,label]):[string,string]=>[key,label])},{key:'source_user_id',label:'Stabilni ID korisnika (za povezani račun)',optional:true},{key:'source_email',label:'E-mail postojećeg FormaPoint računa (neobavezno)',type:'email'},{key:'recovery',label:'Potvrđena adresa za oporavak',type:'email',optional:true},{key:'password',label:'Lozinka',type:'password'}]},
   mailboxes:{label:'Sandučići',icon:Inbox,fields:[address,{key:'label',label:'Naziv'},{key:'shared',label:'Zajednički sandučić',type:'check'},active,{key:'target_quota_gb',label:'Ciljana kvota (GB)',type:'number'}]},
   senders:{label:'Automatski pošiljatelji',icon:Send,fields:[address,{...address,key:'reply_to',label:'Adresa za odgovor'},{key:'kind',label:'Namjena',options:[['order','Narudžbe'],['promotion','Promocije']] as [string,string][]},active]},
   logs:{label:'Zapisi dostave',icon:ClipboardList,fields:[address,{key:'external_id',label:'Događaj'},{key:'recipient',label:'Primatelj'},{key:'status',label:'Status'},{key:'at',label:'Vrijeme'}]},
@@ -27,6 +28,7 @@ const storageSize=(value:number|null)=>{
   return value+' B';
 };
 type Access={grants:RecordRow[];aliases:RecordRow[]};
+type ProvisionPlan={users:{id:number;org:number;email:string;name:string}[];hasMore:boolean;org:number|null};
 export function Admin({session}:{session:Session}){
   const root=session.account.role==='root';
   const [section,setSection]=useState<Section>(location.pathname.endsWith('/automatsko-slanje')?'senders':'mailboxes');
@@ -34,13 +36,19 @@ export function Admin({session}:{session:Session}){
   const [storage,setStorage]=useState<Storage>(),[storageBusy,setStorageBusy]=useState(false);
   const [error,setError]=useState(''),[search,setSearch]=useState(''),[filter,setFilter]=useState(''),[edit,setEdit]=useState<RecordRow>(),[org,setOrg]=useState(''),[access,setAccess]=useState<RecordRow>();
   const [kind,setKind]=useState<AccountKind>('staff');
+  const [pinUser,setPinUser]=useState<number>(),[schoolSyncBusy,setSchoolSyncBusy]=useState(false);
   const [pin,setPin]=useState<string>(),[rotating,setRotating]=useState(false);
+  const [editPassword,setEditPassword]=useState(''),[passwordVisible,setPasswordVisible]=useState(false);
+  const [nativeBusy,setNativeBusy]=useState(false),[notice,setNotice]=useState('');
+  const [provisionPlan,setProvisionPlan]=useState<ProvisionPlan>(),[provisionBusy,setProvisionBusy]=useState(false);
+  const [domainBackend,setDomainBackend]=useState('imap');
+  const [workerCopied,setWorkerCopied]=useState(false);
   const config=sections[section],fields:Field[]=config.fields;
   async function load(){try{setRows(await api<RecordRow[]>('/admin/'+section));}catch(e){setError(toError(e));}}
   useEffect(()=>{let alive=true;setRows([]);setError('');api<RecordRow[]>('/admin/'+section).then(x=>{if(alive)setRows(x);}).catch(e=>{if(alive)setError(toError(e));});return ()=>{alive=false;};},[section]);
   useEffect(()=>{api<RecordRow[]>('/admin/organizations').then(setOrgs).catch(()=>{});api<RecordRow[]>('/admin/schools').then(setSchools).catch(()=>{});},[section]);
-  function open(key:Section){setSection(key);setEdit(undefined);setAccess(undefined);setSearch('');setFilter('');history.replaceState(null,'',key==='senders'?'/admin/automatsko-slanje':'/admin');}
-  function begin(row:RecordRow={}){setKind((row.auth_kind as AccountKind|undefined)??'staff');setEdit(row);setOrg(String(row.org??filter??''));setError('');}
+  function open(key:Section){setSection(key);setEdit(undefined);setAccess(undefined);setProvisionPlan(undefined);setSearch('');setFilter('');setNotice('');history.replaceState(null,'',key==='senders'?'/admin/automatsko-slanje':'/admin');}
+  function begin(row:RecordRow={}){setEditPassword('');setPasswordVisible(false);setWorkerCopied(false);setKind((row.auth_kind as AccountKind|undefined)??'staff');setDomainBackend(String(row.mailbox_backend??'imap'));setEdit(row);setOrg(String(row.org??filter??''));setError('');}
   async function save(e:FormEvent<HTMLFormElement>){
     e.preventDefault();setError('');
     const data=new FormData(e.currentTarget),values:Record<string,unknown>={key:edit?.id??(section==='domains'?edit?.name:undefined),org};
@@ -51,32 +59,36 @@ export function Admin({session}:{session:Session}){
       values[field.key]=field.type==='check'?data.has(field.key):field.type==='number'||field.type==='school'?(value?Number(value):null):value||null;
     }
     if(section==='users' && kind!=='local')values.recovery=null;
-    try{await api('/admin/'+section,'POST',values);setEdit(undefined);await load();}catch(e){setError(toError(e));}
+    try{await api('/admin/'+section,'POST',values);setEdit(undefined);await load();if(section==='users'&&kind==='staff'&&editPassword){const list=await api<RecordRow[]>('/admin/users');const saved=list.find(row=>row.email===values.email);if(saved){setPinUser(String(saved.email).endsWith('@skolehr.xyz')?Number(saved.id):undefined);setPin(editPassword);}}}catch(e){setError(toError(e));}
   }
   function showField(field:Field){
+    if(section==='domains'&&field.key==='mailbox_backend')return root;
     if(section!=='users')return true;
     if(field.key==='source_user_id')return usesUsername(kind);
     if(field.key==='source_email')return kind==='formapoint';
-    if(['password','recovery'].includes(field.key))return kind==='local';
+    if(field.key==='password')return kind!=='ednevnik'&&!(kind==='formapoint'&&edit?.source_user_id);
+    if(field.key==='recovery')return kind==='local';
     return true;
   }
   async function rotatePin(row:RecordRow){
     setRotating(true);setError('');
-    try{setPin((await api<{pin:string}>('/admin/users/'+row.id+'/pin','POST')).pin);}
+    try{setPinUser(String(row.email).endsWith('@skolehr.xyz')?Number(row.id):undefined);setPin((await api<{password:string}>('/admin/users/'+row.id+'/password','POST')).password);}
     catch(e){setError(toError(e));}finally{setRotating(false);}
   }
+  async function schoolSync(){setSchoolSyncBusy(true);setError('');let count=0,conflicts=0;try{for(let page=0;page<20;page++){const r=await api<{created:number;existing:number;conflicts:number;hasMore:boolean}>('/admin/schools/sync','POST');count+=r.created;conflicts+=r.conflicts;if(!r.hasMore)break;}setNotice(`Školska sinkronizacija: novih sandučića ${count}, zapisa za provjeru ${conflicts}.`);await load();}catch(e){setError(toError(e));}finally{setSchoolSyncBusy(false);}}
+  async function credentialPdf(uid:number,password?:string){try{const r=await fetch('/api/admin/users/'+uid+'/credentials.pdf',{method:password?'POST':'GET',headers:password?{'Content-Type':'application/json'}:undefined,body:password?JSON.stringify({password}):undefined});if(!r.ok){const data=await r.json();throw new Error(data.error||'PDF nije dostupan.');}const url=URL.createObjectURL(await r.blob()),link=document.createElement('a');link.href=url;link.download='skolehr-podaci-za-prijavu.pdf';link.click();setTimeout(()=>URL.revokeObjectURL(url),60000);}catch(e){setError(toError(e));}}
   async function downloadInitialPins(){
-    if(!window.confirm('Generirati početne PIN-ove za do 50 novih djelatnika? Datoteka ih sadrži u čitljivom obliku.'))return;
+    if(!window.confirm('Generirati početne lozinke za do 50 djelatnika i FormaPoint korisnika bez WebmailHR lozinke? Datoteka ih sadrži u čitljivom obliku.'))return;
     setRotating(true);setError('');
     try{
-      const {generated}=await api<{generated:{email:string;pin:string}[]}>('/admin/staff/initial-pins','POST',{org:filter?Number(filter):null});
+      const {generated}=await api<{generated:{email:string;password:string}[]}>('/admin/users/initial-passwords','POST',{org:filter?Number(filter):null});
       if(!generated.length){
-        setError('U odabranoj organizaciji nema djelatnika bez početnog PIN-a.');
+        setError('U odabranoj organizaciji nema djelatnika ni FormaPoint korisnika bez početne lozinke.');
         return;
       }
-      const url=URL.createObjectURL(new Blob([JSON.stringify(generated,null,2)],{type:'application/json'}));
+      const url=URL.createObjectURL(new Blob([JSON.stringify(generated.map(({email,password})=>({email,password})),null,2)],{type:'application/json'}));
       const link=document.createElement('a');
-      link.href=url;link.download='webmailhr-pocetni-pinovi.json';
+      link.href=url;link.download='webmailhr-pocetne-lozinke.json';
       link.click();
       setTimeout(()=>URL.revokeObjectURL(url),1000);
     }catch(e){setError(toError(e));}finally{setRotating(false);}
@@ -90,6 +102,32 @@ export function Admin({session}:{session:Session}){
     try{await api('/admin/storage/'+id+'/apply','POST');await loadStorage();}
     catch(e){setError(toError(e));}finally{setStorageBusy(false);}
   }
+  async function enableNative(){
+    if(!edit?.id)return;
+    setNativeBusy(true);setError('');setNotice('');
+    try{
+      await api('/admin/mailboxes/'+edit.id+'/native','POST');
+      setEdit(undefined);setStorage(undefined);await load();
+      setNotice('Sandučić koristi Cloudflare / Mailjet. Za primitak dodajte adresu u Worker i pravilo Email Routing.');
+    }catch(e){setError(toError(e));}finally{setNativeBusy(false);}
+  }
+  async function previewProvision(){
+    setProvisionBusy(true);setError('');setNotice('');
+    try{
+      const org=filter?Number(filter):null;
+      const plan=await api<Omit<ProvisionPlan,'org'>>('/admin/mailboxes/provision'+(org?'?org='+org:''));
+      setProvisionPlan({...plan,org});
+    }catch(e){setError(toError(e));}finally{setProvisionBusy(false);}
+  }
+  async function provision(){
+    if(!provisionPlan)return;
+    setProvisionBusy(true);setError('');
+    try{
+      const result=await api<{created:number;skipped:number}>('/admin/mailboxes/provision','POST',{org:provisionPlan.org,uids:provisionPlan.users.map(x=>x.id)});
+      setProvisionPlan(undefined);setStorage(undefined);await load();
+      setNotice(`Kreirano sandučića: ${result.created}. Preskočeno: ${result.skipped}. Korisnicima su dodijeljene osobne ovlasti.`);
+    }catch(e){setError(toError(e));}finally{setProvisionBusy(false);}
+  }
   const filtered=rows.filter(row=>(!filter||String(row.org)===filter)&&Object.values(row).some(x=>String(x).toLowerCase().includes(search.toLowerCase())));
   const visible=fields.filter(x=>!['password','recovery','source_user_id','source_email'].includes(x.key));
   const display=(value:RecordRow[string],field:Field)=>{
@@ -101,27 +139,39 @@ export function Admin({session}:{session:Session}){
     return field.options?.find(x=>x[0]===value)?.[1]||String(value??'—');
   };
   return <main className="workspace-layout"><aside className="sidebar"><p className="section-label">Administracija</p><nav className="folder-list" aria-label="Administracija">{Object.entries(sections).map(([key,{label,icon:Icon}])=><button className={section===key?'active':''} key={key} onClick={()=>open(key as Section)}><Icon size={18}/>{label}</button>)}</nav></aside><section className="workspace-content">
-    <div className="page-heading"><h1>{config.label}</h1>{section==='users'&&root&&<button className="secondary" disabled={rotating} onClick={downloadInitialPins}><KeyRound size={16}/> Početni PIN-ovi djelatnika</button>}{section!=='logs'&&(section!=='organizations'||root)&&<button className="primary" onClick={()=>begin()}><Plus size={18}/> {section==='mailboxes'?'Novi sandučić':section==='senders'?'Dodaj pošiljatelja':'Dodaj zapis'}</button>}</div>
+    <div className="page-heading"><h1>{config.label}</h1>{root&&['users','schools','mailboxes'].includes(section)&&<button className="secondary" disabled={schoolSyncBusy} onClick={schoolSync}>{schoolSyncBusy?'Sinkronizacija…':'Sinkroniziraj škole'}</button>}{section==='users'&&root&&<button className="secondary" disabled={rotating} onClick={downloadInitialPins}><KeyRound size={16}/> Početne lozinke</button>}{(section==='users'||section==='mailboxes')&&<button className="secondary" disabled={provisionBusy} onClick={previewProvision}><Inbox size={16}/>{provisionBusy?'Priprema…':'Kreiraj sandučiće korisnicima'}</button>}{section!=='logs'&&(section!=='organizations'||root)&&<button className="primary" onClick={()=>begin()}><Plus size={18}/> {section==='mailboxes'?'Novi sandučić':section==='senders'?'Dodaj pošiljatelja':'Dodaj zapis'}</button>}</div>
     <div className="filters">{section!=='organizations'&&section!=='logs'&&root&&<select aria-label="Organizacija" value={filter} onChange={e=>setFilter(e.target.value)}><option value="">Sve organizacije</option>{orgs.map(x=><option key={String(x.id)} value={String(x.id)}>{x.name}</option>)}</select>}<label className="search wide-search"><Search size={18}/><input aria-label="Pretraži zapise" placeholder="Pretraži zapise…" value={search} onChange={e=>setSearch(e.target.value)}/></label></div>
-    {section==='mailboxes'&&<div className="storage-admin"><p className="muted">Stvarna kvota i usmjeravanje aliasa ovise o poštanskom poslužitelju.</p><button className="secondary" disabled={storageBusy} onClick={loadStorage}>{storageBusy?'Dohvaćanje…':'Osvježi stanje pohrane'}</button></div>}
+    {section==='mailboxes'&&<div className="storage-admin"><p className="muted">Na Cloudflare / Mailjet domeni novi osobni sandučić automatski se uključuje i dodjeljuje korisniku iste adrese. Postojeći sandučići se ne mijenjaju.</p><button className="secondary" disabled={storageBusy} onClick={loadStorage}>{storageBusy?'Dohvaćanje…':'Osvježi stanje pohrane'}</button></div>}
     {section==='mailboxes'&&storage&&<p className="storage-summary">Kapacitet: {storageSize(storage.capacity)} · Prijavljena potrošnja: {storageSize(storage.boxes.reduce((sum,x)=>sum+(x.used??0),0))} · Ciljane kvote: {storage.boxes.reduce((sum,x)=>sum+x.target,0)} GiB · Izmjerena kvota: {storage.boxes.filter(x=>x.limit!=null).length}/{storage.boxes.length} sandučića</p>}
     {error&&!edit&&<p className="error">{error}</p>}
-    <div className="table-wrap"><table><thead><tr>{visible.map(f=><th key={f.key}>{f.label}</th>)}{'org' in (rows[0]??{})&&<th>Organizacija</th>}{section==='mailboxes'&&storage&&<th>Potrošnja / stvarna kvota</th>}{section!=='logs'&&<th>Radnje</th>}</tr></thead><tbody>
-    {filtered.map(row=><tr key={String(row.id??row.name)}>{visible.map(f=><td key={f.key}>{display(row[f.key],f)}</td>)}{'org' in row&&<td>{orgs.find(x=>x.id===row.org)?.name||row.org}</td>}{section==='mailboxes'&&storage&&<td>{storageSize(storage.boxes.find(x=>x.address===row.address)?.used??null)} / {storageSize(storage.boxes.find(x=>x.address===row.address)?.limit??null)}</td>}{section!=='logs'&&<td><div className="actions">{(section!=='organizations'||root)&&<button className="icon secondary" title="Uredi" onClick={()=>begin(row)}><Pencil size={16}/></button>}{section==='users'&&row.auth_kind==='staff'&&(root||row.role==='user')&&<button className="secondary" disabled={rotating} onClick={()=>rotatePin(row)}><KeyRound size={16}/> Generiraj / resetiraj lozinku</button>}{section==='mailboxes'&&<button className="icon secondary" title="Ovlasti i aliasi" onClick={()=>setAccess(row)}><KeyRound size={16}/></button>}{section==='mailboxes'&&storage?.canApply&&row.active&&<button className="secondary" disabled={storageBusy} onClick={()=>applyStorage(row.id)}>Primijeni kvotu</button>}</div></td>}</tr>)}
+    {notice&&!edit&&<p className="notice" role="status">{notice}</p>}
+    <div className="table-wrap"><table><thead><tr>{visible.map(f=><th key={f.key}>{f.label}</th>)}{section==='mailboxes'&&<th>Poštanski servis</th>}{'org' in (rows[0]??{})&&<th>Organizacija</th>}{section==='mailboxes'&&storage&&<th>Potrošnja / stvarna kvota</th>}{section!=='logs'&&<th>Radnje</th>}</tr></thead><tbody>
+    {filtered.map(row=><tr key={String(row.id??row.name)}>{visible.map(f=><td key={f.key}>{section==='mailboxes'&&row.storage_kind==='native'&&f.key==='target_quota_gb'?'Serverska kvota':display(row[f.key],f)}</td>)}{section==='mailboxes'&&<td>{row.storage_kind==='native'?'Cloudflare / Mailjet':'IMAP / SMTP'}</td>}{'org' in row&&<td>{orgs.find(x=>x.id===row.org)?.name||row.org}</td>}{section==='mailboxes'&&storage&&<td>{storageSize(storage.boxes.find(x=>x.address===row.address)?.used??null)} / {storageSize(storage.boxes.find(x=>x.address===row.address)?.limit??null)}</td>}{section!=='logs'&&<td><div className="actions">{(section!=='organizations'||root)&&<button className="icon secondary" title="Uredi" onClick={()=>begin(row)}><Pencil size={16}/></button>}{section==='users'&&row.email?.toString().endsWith('@skolehr.xyz')&&<button className="secondary" onClick={()=>credentialPdf(Number(row.id))}>{row.auth_kind==='ednevnik'?'PDF identiteta (bez lozinke)':'PDF podataka za prijavu'}</button>}{section==='users'&&['staff','formapoint'].includes(String(row.auth_kind))&&!(row.auth_kind==='formapoint'&&row.source_user_id)&&(root||row.role==='user')&&<button className="secondary" disabled={rotating} onClick={()=>rotatePin(row)}><KeyRound size={16}/> Generiraj / resetiraj lozinku</button>}{section==='mailboxes'&&<button className="icon secondary" title="Ovlasti i aliasi" onClick={()=>setAccess(row)}><KeyRound size={16}/></button>}{section==='mailboxes'&&storage?.canApply&&row.active&&row.storage_kind!=='native'&&<button className="secondary" disabled={storageBusy} onClick={()=>applyStorage(row.id)}>Primijeni kvotu</button>}</div></td>}</tr>)}
     </tbody></table>{!filtered.length&&<p className="empty compact">Nema zapisa za prikaz.</p>}</div>
     {edit&&<div className="modal-backdrop"><section className="modal" role="dialog" aria-modal="true" aria-label="Uredi zapis"><div className="reader-heading"><h2>{edit.id||edit.name?'Uredi zapis':'Novi zapis'}</h2><button className="icon secondary" aria-label="Zatvori" onClick={()=>setEdit(undefined)}><X size={18}/></button></div><form onSubmit={save}>
       {root&&section!=='organizations'&&<label>Organizacija<select required value={org} onChange={e=>setOrg(e.target.value)} disabled={!!edit.org}><option value="">Odaberite organizaciju</option>{orgs.map(x=><option key={String(x.id)} value={String(x.id)}>{x.name}</option>)}</select></label>}
       {fields.filter(showField).map(f=>{
+        if(f.key==='mailbox_backend')return <label key={f.key}>{f.label}<select name={f.key} value={domainBackend} onChange={e=>setDomainBackend(e.target.value)}>{f.options!.map(([key,label])=><option key={key} value={key}>{label}</option>)}</select></label>;
         if(f.key==='auth_kind')return <label key={f.key}>{f.label}<select name={f.key} value={kind} onChange={e=>setKind(e.target.value as AccountKind)}>{accountKinds.map(([key,label])=><option key={key} value={key}>{label}</option>)}</select></label>;
+        if(f.key==='password')return <label key={f.key}>Lozinka za WebmailHR{edit.id&&<small>Ostavite prazno ako je ne mijenjate.</small>}<span className="password"><input name="password" type={passwordVisible?'text':'password'} value={editPassword} onChange={e=>setEditPassword(e.target.value)} autoComplete="new-password" minLength={8} maxLength={512} required={!edit.id&&kind!=='formapoint'}/><button type="button" className="icon ghost" aria-label={passwordVisible?'Sakrij lozinku':'Prikaži lozinku'} onClick={()=>setPasswordVisible(!passwordVisible)}>{passwordVisible?<EyeOff size={18}/>:<Eye size={18}/>}</button></span><button type="button" className="secondary" disabled={rotating} onClick={async()=>{setRotating(true);setError('');try{setEditPassword((await api<{password:string}>('/admin/passwords/generate','POST')).password);setPasswordVisible(true);}catch(e){setError(toError(e));}finally{setRotating(false);}}}><KeyRound size={16}/> Generiraj lozinku</button></label>;
         const value=edit[f.key];
         if(f.type==='check')return <label className="check" key={f.key}><input name={f.key} type="checkbox" defaultChecked={typeof value==='boolean'?value:f.key!=='shared'}/>{f.label}</label>;
         if(f.type==='school')return <label key={f.key}>{f.label}<select name={f.key} defaultValue={String(value??'')}><option value="">Bez odabira</option>{schools.filter(x=>!org||String(x.org)===org).map(x=><option key={String(x.id)} value={String(x.id)}>{x.name}</option>)}</select></label>;
         if(f.options)return <label key={f.key}>{f.label}<select name={f.key} defaultValue={String(value??f.options[0][0])}>{f.options.filter(x=>root||f.key!=='role'||x[0]==='user').map(([key,label])=><option key={key} value={key}>{label}</option>)}</select></label>;
-        return <label key={f.key}>{f.label}<input name={f.key} type={f.type||'text'} defaultValue={String(value??(f.key==='target_quota_gb'?15:''))} required={f.key==='source_user_id'||(!f.optional&&!(f.key==='password'&&!!edit.id&&edit.auth_kind==='local'))} minLength={f.key==='password'?8:undefined}/></label>;
+        return <label key={f.key}>{f.label}<input name={f.key} type={f.type||'text'} defaultValue={String(value??(f.key==='target_quota_gb'?15:''))} required={f.key==='source_user_id'?kind==='ednevnik':f.key==='source_email'?false:!f.optional} minLength={f.key==='password'?8:undefined}/></label>;
       })}{error&&<p className="error">{error}</p>}<button className="primary">Spremi</button>
-    </form></section></div>}
-    {pin!==undefined&&<div className="modal-backdrop"><section className="modal" role="dialog" aria-modal="true" aria-labelledby="staff-pin-title"><div className="reader-heading"><h2 id="staff-pin-title">Nova lozinka djelatnika</h2></div><p>Lozinka se prikazuje samo sada. Predajte je djelatniku sigurnim kanalom.</p><output className="staff-pin">{pin}</output><button className="primary" onClick={()=>setPin(undefined)}>Zatvori</button></section></div>}
+    </form>{section==='domains'&&root&&domainBackend==='native'&&<section aria-label="Jednokratno povezivanje Cloudflarea"><h3>Jednokratno povezivanje Cloudflarea</h3><ol><li>Kopirajte pripremljeni kod u Cloudflare Worker i objavite ga.</li><li>U Workeru postavite ENABLED_RECIPIENTS na zvjezdicu (*). Postojeći INBOUND_URL i INBOUND_SECRET ostaju isti.</li><li>Za domenu koja već koristi Cloudflare MX postavite Email Routing → Catch-all → Send to a Worker → webmailhr-inbound.</li></ol><p>Nakon toga za nove osobne sandučiće ne trebate pojedinačna pravila. Nepostojeće i neaktivne adrese odbija WebmailHR. Ove upute ne mijenjaju MX; prelazak sa Zohoa odobrava se zasebno.</p><button className="secondary" onClick={async()=>{try{await navigator.clipboard.writeText(cloudflareWorker);setWorkerCopied(true);}catch{setError('Kopirajte kod iz polja ispod.');}}}>{workerCopied?'Kod je kopiran':'Kopiraj kod Workera'}</button><details><summary>Prikaži kod za ručno kopiranje</summary><textarea aria-label="Kod Cloudflare Workera" readOnly value={cloudflareWorker} rows={8}/></details></section>}{section==='mailboxes'&&edit.id&&<section aria-label="Poštanski servis"><h3>Poštanski servis</h3>{edit.storage_kind==='native'?<p>Cloudflare / Mailjet. Stvarnu kvotu provjerite putem stanja pohrane.</p>:<><p>IMAP / SMTP</p>{root&&<><p>Uključite Cloudflare / Mailjet za spremljeni aktivni osobni sandučić s jednim vlasnikom iste e-mail adrese. Postojeće poruke s IMAP poslužitelja ne prenose se. Kvotu određuju serverske postavke pohrane.</p><button className="secondary" disabled={nativeBusy} onClick={enableNative}>{nativeBusy?'Uključivanje…':'Uključi Cloudflare / Mailjet'}</button></>}</>}</section>}</section></div>}
+    {pin!==undefined&&<div className="modal-backdrop"><section className="modal" role="dialog" aria-modal="true" aria-labelledby="assigned-password-title"><div className="reader-heading"><h2 id="assigned-password-title">Nova lozinka za WebmailHR</h2></div><p>Lozinka se prikazuje samo sada. Predajte je korisniku sigurnim kanalom.</p><output className="assigned-password">{pin}</output>{pinUser&&<button className="secondary" onClick={()=>credentialPdf(pinUser,pin)}>Preuzmi PDF podataka za prijavu</button>}<button className="primary" onClick={()=>setPin(undefined)}>Zatvori</button></section></div>}
     {access&&<Permissions box={access} close={()=>setAccess(undefined)}/>}
+    {provisionPlan&&<div className="modal-backdrop"><section className="modal" role="dialog" aria-modal="true" aria-labelledby="provision-title"><div className="reader-heading"><h2 id="provision-title">Kreiraj osobne sandučiće</h2><button className="icon secondary" aria-label="Zatvori" disabled={provisionBusy} onClick={()=>setProvisionPlan(undefined)}><X size={18}/></button></div>
+      <p>{provisionPlan.org?orgs.find(x=>x.id===provisionPlan.org)?.name:'Dostupne organizacije'}</p>
+      <p>Stvaraju se samo nedostajući osobni sandučići aktivnih korisnika na Cloudflare / Mailjet domenama. Svaki korisnik dobiva ovlasti samo za svoju adresu. Postojeći i sinkronizirani sandučići se ne mijenjaju.</p>
+      {provisionPlan.users.length?<><p>Za kreiranje: {provisionPlan.users.length}</p><ul>{provisionPlan.users.map(x=><li key={x.id}>{x.email}</li>)}</ul></>:<p>Nema korisnika kojima nedostaje sandučić na omogućenoj domeni. Način rada domene provjerite u izborniku Domene.</p>}
+      {provisionPlan.hasMore&&<p>Postoji još korisnika. Nakon ove skupine ponovite postupak.</p>}
+      <p>Za automatski primitak jednom povežite domenu s Cloudflare Workerom. Stvaranje sandučića ne mijenja DNS.</p>
+      {error&&<p className="error" role="alert">{error}</p>}
+      <button className="primary" disabled={provisionBusy||!provisionPlan.users.length} onClick={provision}>{provisionBusy?'Kreiranje…':`Kreiraj ${provisionPlan.users.length} sandučića`}</button>
+    </section></div>}
   </section></main>;
 }
 function Permissions({box,close}:{box:RecordRow;close:()=>void}){

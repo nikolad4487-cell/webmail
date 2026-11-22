@@ -1,7 +1,8 @@
+import {setupElectronicIdentity} from './electronic-identity.js';
+import {matchesPassword,newPassword,sharedPassword,verifyCurrentPassword} from './passwords.js';
 import {setupInbound} from './inbound.js';
 import {isNative,changeNative,MAX_NATIVE_BYTES} from './native-mail.js';
-import {invalidLogin,staffSecret,verifyFormaPoint,verifyStudent} from './identity.js';
-import {setupElectronicIdentity,identityPassword} from './electronic-identity.js';
+import {invalidLogin,verifyFormaPoint,verifyStudent,isLinkedFormaPoint,changeFormaPointPassword} from './identity.js';
 import express, {type Request,type Response} from 'express';
 import {z, ZodError} from 'zod';
 import {checkLoginDatabase,db,digest,hashPassword,loginDatabaseIssue,token,transaction,verifyPassword,type LoginDatabaseIssue} from './db.js';
@@ -9,6 +10,8 @@ import {addressing,append,archiveDraft,demo,folder,HttpError,imap,listing,messag
 import {email,id,user,deny} from './http.js';
 import {setupData} from './workspace.js';
 import {setupAutomation} from './automation.js';
+import {setupSchoolAdmin,setupSchoolEndpoints,schoolSource,syncSchoolPerson} from './school-mailboxes.js';
+import {setupFormaPointMailboxes} from './formapoint-mailboxes.js';
 
 const app=express(), api=express.Router(), production=process.env.NODE_ENV==='production';
 const configuredPublicOrigin=process.env.APP_ORIGIN?.trim() || (production?'https://webmailhr.com':'');
@@ -40,6 +43,8 @@ app.use((_req,res,next)=>{
   next();
 });
 setupInbound(app,host=>publicHosts.has(host)||(!production&&!origin&&host.startsWith('127.0.0.1:')));
+setupSchoolEndpoints(app,host=>publicHosts.has(host)||(!production&&!origin&&host.startsWith('127.0.0.1:')));
+setupFormaPointMailboxes(app,host=>publicHosts.has(host)||(!production&&!origin&&host.startsWith('127.0.0.1:')));
 app.use('/api',express.json({limit:'17mb'}),(_req,res,next)=>{res.set('Cache-Control','no-store');next();},api);
 api.use((req,_res,next)=>{
   if (!['GET','HEAD','OPTIONS'].includes(req.method) && req.get('origin')) {
@@ -95,9 +100,10 @@ async function signIn(req:Request,res:Response,adminLogin=false){
   if(!address.success && (adminLogin || identifier.includes('@'))) throw invalidLogin();
   const rateKey='login:'+(adminLogin?'admin:':'')+loginName.toLowerCase();
   await limit('ip:'+req.ip,80);
-  const {rows:matches}=address.success ? await db.query(
-    'select id,email,auth_kind,password,role,active,source_project,source_user_id,source_email,identity_password from users where email=$1 or source_email=$1',
-    [address.data]) : {rows:[]};
+  const lookup=address.success?address.data:/^[a-z0-9][a-z0-9._-]{0,63}$/i.test(identifier)?identifier.toLowerCase()+'@skolehr.xyz':undefined;
+  const {rows:matches}=lookup ? await db.query(
+    'select id,email,auth_kind,password,password_scheme,role,active,source_project,source_user_id,source_email from users where email=$1 or source_email=$1',
+    [lookup]) : {rows:[]};
   const linked=matches.length===1 && matches[0].active ? matches[0] : undefined;
   const studentIdentifier=!address.success || studentDomains.has(address.data.split('@').at(-1)!);
   const kind=adminLogin?'local':linked?.auth_kind ?? (matches.length===0 && studentIdentifier?'ednevnik':undefined);
@@ -108,32 +114,34 @@ async function signIn(req:Request,res:Response,adminLogin=false){
   let source:{projectId:string;userId:string}|undefined;
   let checkedSourceEmail:string|null=null;
   if(kind==='ednevnik'){
-    source=await verifyStudent(loginName,password);
-    const {rows:[account]}=await db.query('select id from users where auth_kind=$1 and source_project=$2 and source_user_id=$3 and active',
+    let sourceLogin=loginName;
+    if(linked){const {rows:[school]}=await db.query('select source_login from school_mail_identities where uid=$1',[linked.id]).catch(()=>({rows:[]}));if(school)sourceLogin=school.source_login;}
+    if(process.env.SCHOOL_SYNC_TOKEN){const verified=await schoolSource({action:'family-login',username:sourceLogin,password});source={projectId:process.env.EDNEVNIK_SUPABASE_PROJECT_ID!,userId:String(verified.user_id)};}
+    else source=await verifyStudent(sourceLogin,password);
+    let {rows:[account]}=await db.query('select id from users where auth_kind=$1 and source_project=$2 and source_user_id=$3 and active',
       [kind,source.projectId,source.userId]);
+    if(!account&&process.env.SCHOOL_SYNC_TOKEN){const roster=await schoolSource({action:'roster-person',subject:source.userId});if(roster.project!==source.projectId)throw invalidLogin();const person=roster.people?.find((p:any)=>p.subject===source!.userId);if(person&&['student','parent'].includes(person.kind)){const synced=await syncSchoolPerson(person,'login-'+source.userId);account={id:synced.uid};}}
     if(linked && account?.id!==linked.id) throw invalidLogin();
     if(!account) throw noMailbox();
     verifiedId=account.id;
-  }else if(kind==='formapoint'){
+  }else if(linked&&isLinkedFormaPoint(linked)){
     if(!linked?.source_email) throw invalidLogin();
     checkedSourceEmail=linked.source_email;
     source=await verifyFormaPoint(linked.source_email,password,{projectId:linked.source_project,userId:linked.source_user_id});
+    checkedHash=linked.password;
     verifiedId=linked.id;
   }else{
     const allowed=linked && linked.auth_kind===kind && (
-      kind==='staff' || (adminLogin && linked.role==='root' && linked.email===loginName) ||
+      kind==='staff' || (!adminLogin&&kind==='formapoint') || (adminLogin && linked.role==='root' && linked.email===loginName) ||
       (demo && linked.email.endsWith('.test') && ((adminLogin && !adminOrigin) || (!adminLogin && linked.role!=='root'))));
-    if(kind==='staff' && !(linked?.identity_password?identityPassword(password):/^[0-9]{8}$/.test(password))) throw invalidLogin();
-    const candidate=kind==='staff'?staffSecret(password):password;
-    const matches=await verifyPassword(candidate,allowed?linked.password??await fallback:await fallback);
+    const matches=allowed&&linked.password ? await matchesPassword(linked,password) : await verifyPassword(password,await fallback);
     if(!matches || !allowed || !linked.password) throw invalidLogin();
     verifiedId=linked.id;checkedHash=linked.password;
   }
   const key=token(), lifetime=(input.remember?30:1)*86400000;
   await transaction(async client=>{
-    const {rows:[account]}=await client.query('select role,password,source_project,source_user_id,source_email,identity_password from users where id=$1 and auth_kind=$2 and active for update',[verifiedId,kind]);
-    if(kind==='staff'&&!!account?.identity_password!==!!linked?.identity_password)throw invalidLogin();
-    if(!account || (adminOrigin && adminLogin && account.role!=='root') || account.password!==checkedHash || (source && (account.source_project!==source.projectId || account.source_user_id!==source.userId || account.source_email!==checkedSourceEmail))) throw invalidLogin();
+    const {rows:[account]}=await client.query('select role,password,password_scheme,source_project,source_user_id,source_email from users where id=$1 and auth_kind=$2 and active for update',[verifiedId,kind]);
+    if(!account || (adminOrigin && adminLogin && account.role!=='root') || account.password!==checkedHash || (checkedHash&&account.password_scheme!==linked?.password_scheme) || (source && (account.source_project!==source.projectId || account.source_user_id!==source.userId || account.source_email!==checkedSourceEmail))) throw invalidLogin();
     if(source && !(await client.query(`select 1 from grants g join mailboxes m on m.id=g.box join users u on u.id=g.uid
       where u.id=$1 and m.active and ${studentBox} limit 1`,[verifiedId,demo])).rowCount) throw noMailbox();
     await client.query('delete from login_limits where key=$1',[digest(rateKey)]);
@@ -180,7 +188,7 @@ api.post('/reset',async (req,res)=>{
   await transaction(async client=>{
     const {rows:[reset]}=await client.query('delete from resets where token=$1 and expires>now() returning uid',[digest(input.key)]);
     if(!reset) throw new HttpError(400,'Poveznica je istekla ili nije valjana.');
-    const updated=await client.query("update users set password=$3 where id=$1 and active and auth_kind='local' and "+localAccount+" and (role='root' or $4::boolean)",[reset.uid,demo,secret,input.password.length>=12]);
+    const updated=await client.query("update users set password=$3 where id=$1 and active and auth_kind='local' and "+localAccount+" and (role='root' or $4::boolean)",[reset.uid,demo,secret,input.password.length>=8]);
     if(!updated.rowCount) throw new HttpError(400,'Poveznica je istekla ili nije valjana.');
     await client.query('delete from sessions where uid=$1',[reset.uid]);
     await client.query('delete from resets where uid=$1',[reset.uid]);
@@ -192,9 +200,35 @@ setupAutomation(api);
 api.use(async (req,_res,next)=>{
   const key=session(req);
   if(!key) throw new HttpError(401,'Prijavite se za nastavak.');
-  const {rows:[account]}=await db.query(`select u.id,u.org,u.email,u.name,u.role from users u join sessions s on s.uid=u.id where s.token=$1 and s.expires>now() and u.active and (u.auth_kind<>'local' or ${localAccount})`,[digest(key),demo]);
+  const {rows:[account]}=await db.query(`select u.id,u.org,u.school,u.email,u.name,u.role,u.auth_kind,(u.auth_kind='formapoint' and u.source_project is not null and u.source_user_id is not null and u.source_email is not null) as shared_password from users u join sessions s on s.uid=u.id where s.token=$1 and s.expires>now() and u.active and (u.auth_kind<>'local' or ${localAccount})`,[digest(key),demo]);
   if(!account || (adminOrigin && (account.role==='root')!==isAdminSite(req))) throw new HttpError(401,'Sesija je istekla.');
   Object.assign(req,{account}); next();
+});
+api.post('/account/password',async(req,res)=>{
+  const a=user(req);
+  await limit('password:'+a.id,8);
+  const input=z.object({currentPassword:z.string().min(1).max(512),newPassword}).strict().parse(req.body);
+  const {rows:[account]}=await db.query('select * from users where id=$1 and active',[a.id]);
+  if(!account || !['staff','formapoint','local'].includes(account.auth_kind))return deny();
+  const shared=isLinkedFormaPoint(account);
+  if(shared)sharedPassword.parse(input.newPassword);
+  if(!shared&&!await verifyCurrentPassword(account,input.currentPassword))throw invalidLogin();
+  if(input.currentPassword===input.newPassword)throw new HttpError(400,'Odaberite drukčiju novu lozinku.');
+  const hash=shared?null:await hashPassword(input.newPassword);
+  await transaction(async c=>{
+    const {rows:[current]}=await c.query('select * from users where id=$1 and active for update',[a.id]);
+    if(!current || current.password!==account.password || current.password_scheme!==account.password_scheme ||
+      current.auth_kind!==account.auth_kind || current.source_project!==account.source_project ||
+      current.source_user_id!==account.source_user_id || current.source_email!==account.source_email ||
+      !(await c.query('select 1 from sessions where token=$1 and uid=$2 and expires>now()',[digest(session(req)!),a.id])).rowCount)throw new HttpError(401,'Sesija je istekla. Prijavite se ponovno.');
+    if(shared)await changeFormaPointPassword(current.source_email,input.currentPassword,input.newPassword,{projectId:current.source_project,userId:current.source_user_id});
+    await c.query("update users set password=$2,password_scheme='scrypt' where id=$1",[a.id,hash]);
+    await c.query('update school_mail_identities set initial_password=null where uid=$1',[a.id]);
+    await c.query('delete from sessions where uid=$1',[a.id]);
+    await c.query('delete from resets where uid=$1',[a.id]);
+    await c.query('insert into audits(uid,action,target) values($1,$2,$3)',[a.id,'password.change',String(a.id)]);
+  });
+  res.clearCookie(cookie,cookieOptions).json({ok:true});
 });
 api.post('/logout',async (req,res)=>{await db.query('delete from sessions where token=$1',[digest(session(req)!)]);res.clearCookie(cookie,cookieOptions).json({ok:true});});
 api.get('/me',async (req,res)=>{
@@ -293,6 +327,7 @@ api.post('/mail/:box/send',async(req,res)=>{
   res.json({ok:true,warning:warnings.join(' ') || undefined});
 });
 setupData(api);
+setupSchoolAdmin(api);
 app.use('/api',(_req,res)=>res.status(404).json({error:'Radnja nije pronađena.'}));
 app.use((err:unknown,_req:express.Request,res:express.Response,_next:express.NextFunction)=>{
   if(err instanceof DatabaseUnavailable) {res.status(err.status).json({error:err.message,code:err.code});return;}

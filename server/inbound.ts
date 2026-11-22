@@ -2,14 +2,17 @@ import express,{type Express} from 'express';
 import {createHash,createHmac,timingSafeEqual} from 'node:crypto';
 import {HttpError} from './mail.js';
 import {MAX_NATIVE_BYTES,storeNative} from './native-mail.js';
+import {db} from './db.js';
+import {usesNativeDomain} from './mailbox-provisioning.js';
+import type {PoolClient} from 'pg';
 
-export function enabledNativeAddress(address:string){
+export async function enabledNativeAddress(address:string,client:Pick<PoolClient,'query'>=db){
   return (process.env.NATIVE_ENABLED_ADDRESSES||'demo@skolehr.xyz').split(',').map(x=>x.trim().toLowerCase()).includes(address)
-    && ['skolehr.xyz','formapoint.online'].includes(address.split('@')[1]);
+    || await usesNativeDomain(client,address);
 }
 export function setupInbound(app:Express,allowedHost:(host:string)=>boolean){
   const path='/api/inbound/cloudflare';
-  app.post(path,(req,res,next)=>{
+  app.post(path,async(req,res,next)=>{
     res.set('Cache-Control','no-store');
     if(!allowedHost(req.get('host')?.toLowerCase()||'') || req.get('origin'))throw new HttpError(403,'Zahtjev nije dopušten.');
     const secret=process.env.CLOUDFLARE_INBOUND_SECRET;
@@ -26,7 +29,9 @@ export function setupInbound(app:Express,allowedHost:(host:string)=>boolean){
     }
     const expected=createHmac('sha256',secret).update([timestamp,from,to,bodyHash].join('\n')).digest();
     if(!timingSafeEqual(expected,Buffer.from(signature,'hex')))throw new HttpError(401,'Neispravan potpis.');
-    if(!enabledNativeAddress(to))throw new HttpError(403,'Primatelj nije omogućen za probu.');
+    if(!await enabledNativeAddress(to))throw new HttpError(403,'Primatelj nije omogućen.');
+    const recipient=await db.query("select 1 from mailboxes where address=$1 and active and not shared and storage_kind='native'",[to]);
+    if(!recipient.rowCount)throw new HttpError(404,'Primatelj nije omogućen.');
     next();
   },express.raw({type:()=>true,limit:MAX_NATIVE_BYTES}),async(req,res)=>{
     const raw=req.body as Buffer;

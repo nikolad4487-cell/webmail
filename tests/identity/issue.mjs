@@ -20,7 +20,7 @@ test('Teacher activation stores only a hash, pupils use source Auth, and missing
  const call=(value=body,token='synthetic-token')=>fetch(url,{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},body:JSON.stringify(value)});
  try{
   assert.equal((await call(body,'wrong')).status,401);assert.equal(changes.length,0);
-  let response=await call();assert.equal(response.status,200);assert.equal((await response.json()).ready,true);assert.notEqual(hash,body.password);assert(await verifyPassword('test-pepper:'+body.password,hash));assert.equal(sourceCalls,0,'teacher password does not touch source Auth or its PIN/TOTP');
+  let response=await call();assert.equal(response.status,200);assert.equal((await response.json()).ready,true);assert.notEqual(hash,body.password);assert(await verifyPassword(body.password,hash));assert.equal(sourceCalls,0,'teacher password does not touch source Auth or its PIN/TOTP');
   kind='ednevnik';response=await call({...body,relationship:'STUDENT'});assert.equal(response.status,200);assert.equal(sourceCalls,1);
   ready=false;response=await call({...body,operation:'prepare'});assert.equal(response.status,409);
  }finally{await new Promise(r=>server.close(r));if(old===undefined)delete process.env.EDNEVNIK_IDENTITY_ISSUANCE_TOKEN;else process.env.EDNEVNIK_IDENTITY_ISSUANCE_TOKEN=old;if(oldProject===undefined)delete process.env.EDNEVNIK_SUPABASE_PROJECT_ID;else process.env.EDNEVNIK_SUPABASE_PROJECT_ID=oldProject;}
