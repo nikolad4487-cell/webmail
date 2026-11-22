@@ -10,9 +10,9 @@ export async function schoolCredentialPdf(data,fonts){
  page.drawRectangle({x:33,y:754,width:529,height:60,color:rgb(.92,.92,.92)});
  const text=(value,x,y,size=10,font=regular)=>page.drawText(String(value??'—').replace(/[\r\n]+/g,' '),{x,y,size,font,color:ink,maxWidth:520});
  const fit=(value,max,font=regular,size=10)=>{let s=String(value??'—');while(s.length&&font.widthOfTextAtSize(s,size)>max)s=s.slice(0,-1);return s!==String(value??'—')?s.slice(0,-1)+'…':s;};
- text('ŠKOLEHR.XYZ',49,780,21,bold);
+ text('CARNet',49,780,21,bold);
  text('PODACI O ELEKTRONIČKOM IDENTITETU',260,791,10,bold);
- text('U SUSTAVU ŠKOLEHR.XYZ',338,776,10,bold);
+ text('U SUSTAVU AAI@EduHr',338,776,10,bold);
  const kind=data.kind==='student'?'Učenik':data.kind==='parent'?'Roditelj':'Nastavnik / djelatnik';
  text(kind.toUpperCase(),430,762,8);
  page.drawLine({start:{x:33,y:753},end:{x:562,y:753},thickness:2,color:ink});
