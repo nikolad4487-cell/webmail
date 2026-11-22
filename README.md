@@ -688,3 +688,14 @@ uključuje opseg škole, nepromijenjen PIN, učenika/roditelja, Unicode PDF, pro
 učiteljske lozinke i nedostupan izvor. Regresije: native, provisioning, lozinke,
 FormaPoint, welcome, Prisma-style migracije/RLS i build. e-Matica ima svoj build i
 testove. PDF je renderiran i vizualno pregledan s izmišljenim podacima.
+
+
+Školske uvezene oznake oblika `Ime Prezime | email` čiste se prije kreiranja,
+sinkronizacije i PDF ispisa. Prepoznatljiva pogrešna spojena adresa ispravlja se
+na postojećem isključivo osobnom native sandučiću; identifikatori, poruke,
+privitci, ovlasti i lozinke ostaju isti. Naziv sandučića prati ispravljeno ime.
+Već zauzeta adresa dobiva sljedeći numerički nastavak. Izvorni Auth login/UUID
+ostaju povezani pa se sljedećom sinkronizacijom ne vraća pogrešna oznaka.
+Produkcijska provjera 22. studenoga 2026. obuhvatila je 303 korisnika i ispravila
+20 korisnika zajedno s njihovim sandučićima. Svih 20 osnovnih adresa već je bilo
+zauzeto drugim izvornim računom pa su dodijeljeni nastavci `2`; računi nisu spajani.
