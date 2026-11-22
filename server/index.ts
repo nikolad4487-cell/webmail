@@ -1,13 +1,15 @@
 import express from 'express';
 import {createServer as createHttpServer} from 'node:http';
 import {resolve} from 'node:path';
+import {fileURLToPath} from 'node:url';
 import app from './app.js';
 
 const production=process.env.NODE_ENV==='production';
 const server=createHttpServer(app);
 if(production){
-  app.use(express.static(resolve('dist')));
-  app.get(/.*/,(_req,res)=>res.sendFile(resolve('dist/index.html')));
+  const publicDir=import.meta.url.endsWith('.ts')?resolve('dist'):fileURLToPath(new URL('../',import.meta.url));
+  app.use(express.static(publicDir));
+  app.get(/.*/,(_req,res)=>res.sendFile(resolve(publicDir,'index.html')));
 }else{
   const {createServer}=await import('vite');
   const vite=await createServer({server:{middlewareMode:true,allowedHosts:true,ws:{server}},appType:'spa'});
