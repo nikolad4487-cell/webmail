@@ -174,7 +174,7 @@ export function setupSchoolAdmin(api:Router){
   const {rows:[u]}=await db.query(`select u.*,s.person_kind,s.source_login,s.oib,s.dob::text,s.gender,s.valid_until::text,s.school_data,s.initial_password,s.issued_at
    from users u left join school_mail_identities s on s.uid=u.id where u.id=$1 and u.active`,[uid]);
   if(!u||actor.role!=='root'&&(actor.role!=='admin'||u.org!==actor.org||u.role!=='user'||actor.school&&u.school!==actor.school))return deny();
-  if(!u.email.endsWith('@skolehr.xyz')||!['staff','ednevnik'].includes(u.auth_kind))throw new HttpError(409,'Ovo nije školski mail račun.');
+  if(!u.email.endsWith('@skolehr.xyz')||!['staff','ednevnik'].includes(u.auth_kind)||u.auth_kind==='ednevnik'&&u.person_kind!=='student')throw new HttpError(409,'Ovo nije školski mail račun.');
   let password;
   if(req.method==='POST'){const input=z.object({password:z.string().min(8).max(512)}).strict().parse(req.body);if(u.auth_kind==='staff'){if(!await verifyPassword(input.password,u.password))return deny();}else{const confirmed=await schoolSource({action:'family-login',username:u.source_login||u.email,password:input.password});if(confirmed.user_id!==u.source_user_id)return deny();}password=input.password;}
   if(!password)throw new HttpError(409,'PDF s lozinkom preuzmite tijekom izdavanja nove lozinke.');

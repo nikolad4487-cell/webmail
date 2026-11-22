@@ -154,6 +154,8 @@ test('Malformed imported names and mailbox addresses repair in place without los
 test('Pupil self-change updates source password, revokes mail sessions and never stores a local override',async()=>{
  const u=(await db.query('select u.* from users u join school_mail_identities s on s.uid=u.id where s.subject=$1',[student.subject])).rows[0];
  const current=passwords.get(student.sourceLogin),cookie=await login(u.email,current);
+ assert.equal((await (await request('/me',{cookie})).json()).account.student_password,true);
+ sourceFailure=true;await request('/account/password',{cookie,method:'POST',body:{currentPassword:current,newPassword:'Selfpwd8'},status:503});sourceFailure=false;assert.equal(passwords.get(student.sourceLogin),current);
  await request('/account/password',{cookie,method:'POST',body:{currentPassword:'wrong',newPassword:'Selfpwd8'},status:401});
  await request('/account/password',{cookie,method:'POST',body:{currentPassword:current,newPassword:'Selfpwd8'}});
  assert.equal(passwords.get(student.sourceLogin),'Selfpwd8');assert.equal((await db.query('select password from users where id=$1',[u.id])).rows[0].password,null);
