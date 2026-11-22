@@ -72,7 +72,7 @@ async function authUsers(config:DirectoryConfig){
   }
 }
 
-export function personAddress(source:DirectorySource,domain:string,sourceEmail:string,_subject:string,name?:string){
+export function personAddress(source:DirectorySource,domain:string,sourceEmail:string,_subject:string,name?:string,preserveSourceAddress=true){
   const [local,origin]=sourceEmail.split('@');
   if(source==='ednevnik'){
     if(!['skolehr.xyz','eskole.me'].includes(origin) || reserved.has(local) || !/^[a-z0-9][a-z0-9._-]{0,63}$/.test(local))return;
@@ -80,7 +80,7 @@ export function personAddress(source:DirectorySource,domain:string,sourceEmail:s
   }
   // FormaPoint has already verified ownership of this source email. Its local part
   // does not confer administrator privileges; collision checks protect existing mailboxes.
-  if(origin===domain && /^[a-z0-9][a-z0-9._-]{0,63}$/.test(local))return sourceEmail;
+  if(preserveSourceAddress && origin===domain && /^[a-z0-9][a-z0-9._-]{0,63}$/.test(local))return sourceEmail;
   const words=(name||'').trim().split(/\s+/).filter(Boolean);
   const clean=(value:string)=>value.toLowerCase().replace(/đ/g,'d').normalize('NFKD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,'.').replace(/^\.|\.$/g,'');
   const fullName=words.length>=2&&!words.some(word=>word.includes('@'))?words.map(clean).filter(Boolean).join('.'):'';

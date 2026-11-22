@@ -42,7 +42,7 @@ export async function syncSchoolPerson(input:unknown,run:string){
   if(!bound&&kind==='staff'&&p.sourceLogin.endsWith('@skolehr.xyz')){const {rows:[legacy]}=await c.query("select u.* from users u where u.email=$1 and u.auth_kind='staff' and u.role='user' and not exists(select 1 from directory_identities d where d.uid=u.id)",[p.sourceLogin]);if(legacy)bound=legacy;}
   if(bound&&bound.role!=='root'&&bound.auth_kind!==kind)throw new SchoolRoleConflict(bound.id);
   if(bound&&(bound.org!==domain.org||bound.auth_kind!==kind||bound.role==='root'||!bound.active&&!bound.disabled_by_sync))throw new HttpError(409,'Postojeći račun zahtijeva administratorsku provjeru.');
-  const address=bound?.email??await allocateFormaPointAddress(c,'skolehr.xyz',p.sourceLogin,p.subject,p.name);
+  const address=bound?.email??await allocateFormaPointAddress(c,'skolehr.xyz',p.sourceLogin,p.subject,p.name,{preserveSourceAddress:false});
   const memberships=[];
   for(const s of p.schools){
    const old=(await c.query('select school from directory_schools where project=$1 and subject=$2',[cfg.project,s.id])).rows[0];
@@ -107,7 +107,8 @@ async function runSchoolSync(){
  const data=await schoolSource({action:'roster',page:state.page});
  if(data.project!==cfg.project||!Array.isArray(data.people)||data.people.length>30||data.nextPage!==null&&data.nextPage!==state.page+1)throw new HttpError(503,'Školski izvor nije vratio očekivanu stranicu.');
  let created=0,existing=0,conflicts=0;
- for(const person of data.people){try{const r=await syncSchoolPerson(person,state.run);if(r.created)created++;else existing++;}catch(error){if(error instanceof HttpError&&error.status===409)conflicts++;else throw error;}}
+ const conflictDetails:Array<{subject:string;reason:string}>=[];
+ for(const person of data.people){try{const r=await syncSchoolPerson(person,state.run);if(r.created)created++;else existing++;}catch(error){if(error instanceof HttpError&&error.status===409){conflicts++;conflictDetails.push({subject:person.subject,reason:error.message});}else throw error;}}
  await transaction(async c=>{
   if(data.nextPage===null){
    // Do not prune on partial/conflicting snapshots. Only imported identities are managed.
@@ -120,7 +121,7 @@ async function runSchoolSync(){
    await c.query('delete from school_mail_sync_state where project=$1',[cfg.project]);
   }else await c.query('update school_mail_sync_state set page=$2,conflicts=conflicts+$4 where project=$1 and page=$3',[cfg.project,data.nextPage,state.page,conflicts]);
  });
- return {created,existing,conflicts,hasMore:data.nextPage!==null};
+ return {created,existing,conflicts,conflictDetails,hasMore:data.nextPage!==null};
 }
 const fonts=()=>Promise.all([readFile(new URL('../assets/fonts/NotoSans-Regular.ttf',import.meta.url)),readFile(new URL('../assets/fonts/NotoSans-Bold.ttf',import.meta.url))]);
 export async function credentialPdf(data:Record<string,unknown>){const [regular,bold]=await fonts();return Buffer.from(await schoolCredentialPdf(data,{regular,bold}));}

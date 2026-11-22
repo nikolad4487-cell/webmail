@@ -3,8 +3,8 @@ import {createHash} from 'node:crypto';
 import {personAddress} from './directory-source.js';
 import {HttpError} from './mail.js';
 
-export async function allocateFormaPointAddress(c:Pick<PoolClient,'query'>,domain:string,sourceEmail:string,subject:string,name:string){
-  const preferred=personAddress('formapoint',domain,sourceEmail,subject,name)!;
+export async function allocateFormaPointAddress(c:Pick<PoolClient,'query'>,domain:string,sourceEmail:string,subject:string,name:string,options:{preserveSourceAddress?:boolean}={}){
+  const preferred=personAddress('formapoint',domain,sourceEmail,subject,name,options.preserveSourceAddress)!;
   // Serializes competing names across different source identities. Address collisions
   // are checked against users, source login names, aliases, services and mailboxes.
   await c.query('select pg_advisory_xact_lock(hashtextextended($1,0))',['formapoint-address:'+domain]);
@@ -15,7 +15,7 @@ export async function allocateFormaPointAddress(c:Pick<PoolClient,'query'>,domai
       union all select 1 from mailboxes where address=$1 union all select 1 from aliases where address=$1
       union all select 1 from senders where address=$1`,[address,subject]);
     if(!exists.rowCount)return address;
-    if(sourceEmail.endsWith('@'+domain))throw new HttpError(409,'Potvrđena adresa već je dodijeljena.');
+    if(options.preserveSourceAddress!==false&&sourceEmail.endsWith('@'+domain))throw new HttpError(409,'Potvrđena adresa već je dodijeljena.');
   }
   throw new HttpError(409,'Nije moguće dodijeliti slobodnu osobnu adresu.');
 }

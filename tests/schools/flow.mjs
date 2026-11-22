@@ -59,6 +59,7 @@ test('School teacher receives native private mailbox and independent mixed passw
  const repeated=await syncPerson({...teacher,name:'Marko Marić Novi',schools:[{...school,year_end:'2028-08-31'}]},'again');assert.equal(repeated.uid,teacherRecord.uid);assert.equal(repeated.address,teacherRecord.address);
  assert.equal((await db.query('select valid_until::text date from school_mail_identities where uid=$1',[teacherRecord.uid])).rows[0].date,'2028-10-31');
  const second=await syncPerson(person('teacher','Marko Marić','second@source.test'),'again');assert.equal(second.address,'marko.maric2@skolehr.xyz');
+ const sameDomain=await syncPerson(person('teacher','Marko Marić','obfuscated-id@skolehr.xyz'),'again');assert.equal(sameDomain.address,'marko.maric3@skolehr.xyz');
 });
 test('Student and parent provision on first source-verified login; cannot change their password in WebmailHR',async()=>{
  for(const p of [student,parent]){
