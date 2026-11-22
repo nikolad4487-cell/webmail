@@ -667,10 +667,17 @@ Produkcijska aktivacija zahtijeva izričito odobrenje za:
    imenika. Izvorne Supabase tablice nisu mijenjane. Ključ se ne objavljuje u kodu;
    u Edge kodu nalazi se samo javni otisak za provjeru.
 
-Status prije aktivacije: kod i predložak testirani su lokalno, ali servisni ključ
-nije spremljen u Vercel jer je automatska provjera odobrenja tražila izričitu
-potvrdu korisnika za odredište. Nova školska funkcija još nije objavljena i stvarnom
-učeniku nije izdana lozinka radi testiranja.
+Status aktivacije: korisnik je izričito odobrio produkcijske servisne ključeve,
+objavu integracije, obje aplikacije i početnu sinkronizaciju. Ključevi su spremljeni
+kao Production secrets; WebmailHR i e-Matica su READY, a školska Edge integracija
+je ACTIVE. Neautentificirani servisni i učenički PDF zahtjevi vraćaju 401.
+Imenik se dohvaća u stranicama od 10 profila i najviše pet paralelnih provjera;
+pogreška izvornog Auth servisa prekida snimku, a uklonjen račun (404) se preskače.
+Početna sinkronizacija je pokrenuta. Stvarnom učeniku nije izdana nova lozinka
+radi testiranja. Dnevni cron nastavlja jednu stranicu, a administratorski gumb
+obrađuje do 20 stranica po pokretanju. Za trenutačno masovno osvježavanje koristiti
+gumb; novi obiteljski račun može se kreirati i pri uspješnoj izvornoj prijavi.
+
 
 Provjere: `TEST_SCHOOL_DATABASE_URL=... npm run test:schools` (prazna lokalna baza),
 uključuje opseg škole, nepromijenjen PIN, učenika/roditelja, Unicode PDF, promjenu
