@@ -7,7 +7,7 @@ const uuid=(v:unknown)=>typeof v==='string'&&/^[a-f0-9-]{36}$/i.test(v);
 export function schoolBridge(config:Settings,send:typeof fetch=fetch){
  async function api(path:string,method='GET',body?:unknown,token?:string){
   const response=await send(config.url+path,{method,redirect:'error',signal:AbortSignal.timeout(12000),headers:{apikey:config.key,'Content-Type':'application/json',...(token?{Authorization:'Bearer '+token}:config.key.startsWith('eyJ')?{Authorization:'Bearer '+config.key}:{})},...(body?{body:JSON.stringify(body)}:{})});
-  if(!response.ok)throw Object.assign(new Error('Izvor trenutačno nije dostupan.'),{status:[400,401,403].includes(response.status)?401:503});
+  if(!response.ok)throw Object.assign(new Error('Izvor trenutačno nije dostupan.'),{status:[400,401,403].includes(response.status)?401:503,sourceStatus:response.status});
   return response.json();
  }
  async function rows(table:string,select:string,query:Record<string,string>={}){
@@ -97,7 +97,7 @@ export function schoolBridge(config:Settings,send:typeof fetch=fetch){
    for(let offset=0;offset<profiles.length;offset+=5){
     const batch=await Promise.all(profiles.slice(offset,offset+5).map(async(p:any)=>{
     const subject=p.auth_user_id||p.id;if(!uuid(subject))return;
-    let auth;try{const data=await api('/auth/v1/admin/users/'+subject);auth=data.user??data;}catch{return;}
+    let auth;try{const data=await api('/auth/v1/admin/users/'+subject);auth=data.user??data;}catch(error){if((error as {sourceStatus?:number}).sourceStatus===404)return;throw error;}
     if(!auth?.email||!auth.email_confirmed_at||auth.is_anonymous||auth.banned_until&&Date.parse(auth.banned_until)>Date.now())return;
     const info=await roleInfo(p);
     const isFamily=info.values.length&&info.values.every(v=>family.has(v)),isStaff=info.values.length&&info.values.every(v=>staff.has(v));

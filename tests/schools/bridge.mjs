@@ -4,12 +4,13 @@ import {createHash} from 'node:crypto';
 import {schoolBridge} from '../../integrations/school-bridge/handler.ts';
 const subject='11111111-1111-4111-8111-111111111111',actor='22222222-2222-4222-8222-222222222222',profile='33333333-3333-4333-8333-333333333333';
 const secret='local-school-bridge-only-token';
-function bridge({scope='school-1',targetKind='STUDENT'}={}){
+function bridge({scope='school-1',targetKind='STUDENT',authStatus=200}={}){
  const mutations=[];
  const send=async(url,options)=>{
   const u=new URL(url),path=u.pathname;
   if(path==='/auth/v1/user')return options.headers.Authorization==='Bearer user-jwt'?Response.json({id:actor,email:'school-admin@example.test'}):new Response('{}',{status:401});
   if(path.startsWith('/auth/v1/admin/users/')&&options.method==='PUT'){mutations.push(JSON.parse(options.body));return Response.json({id:subject});}
+  if(path.startsWith('/auth/v1/admin/users/')&&options.method==='GET')return authStatus===200?Response.json({id:subject,email:'luka@example.test',email_confirmed_at:'2026-01-01'}):new Response('{}',{status:authStatus});
   if(path==='/rest/v1/user_profiles'){
    assert.ok(!u.searchParams.get('select').includes('pin'));assert.ok(!u.searchParams.get('select').includes('authenticator'));
    if(u.searchParams.get('auth_user_id')==='eq.'+actor)return Response.json([{id:actor,auth_user_id:actor,role:'SCHOOL_ADMIN',school_id:scope}]);
@@ -35,4 +36,9 @@ test('Cross-school reset, teacher reset and server-token reset are rejected befo
 });
 test('Reading student print metadata does not issue a password',async()=>{
  const {handler,mutations}=bridge();const response=await request(handler,'user-jwt','student-details');assert.equal(response.status,200);assert.equal((await response.json()).person.kind,'student');assert.equal(mutations.length,0);
+});
+
+test('Roster distinguishes removed accounts from source outages',async()=>{
+ for(const status of [401,429,500]){const {handler}=bridge({authStatus:status});assert.notEqual((await request(handler,secret,'roster')).status,200);}
+ const {handler}=bridge({authStatus:404});const response=await request(handler,secret,'roster');assert.equal(response.status,200);assert.deepEqual((await response.json()).people,[]);
 });
