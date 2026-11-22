@@ -172,6 +172,12 @@ export function setupSchoolEndpoints(app:Express,allowedHost:(host:string)=>bool
  app.get('/api/integrations/schools/sync',async(req,res)=>{
   if(!allowedHost(req.get('host')?.toLowerCase()||'')||req.get('origin'))return deny();
   const secret=process.env.CRON_SECRET;if(!secret||req.get('authorization')!=='Bearer '+secret)throw new HttpError(401,'Neispravan servisni zahtjev.');
+  if(req.query.subject!==undefined){
+   const subject=z.uuid().parse(req.query.subject);
+   const data=await schoolSource({action:'roster-person',subject});
+   if(data.project!==config().project||!Array.isArray(data.people)||data.people.length!==1||data.people[0]?.subject!==subject)throw new HttpError(404,'Školski identitet nije potvrđen.');
+   return res.json(await syncSchoolPerson(data.people[0],randomUUID()));
+  }
   res.json(await syncSchools());
  });
 }

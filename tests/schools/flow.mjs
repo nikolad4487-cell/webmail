@@ -107,6 +107,8 @@ test('Unavailable source cannot deactivate accounts; full successful snapshot sa
  assert.equal((await db.query('select active from users where id=$1',[missing.uid])).rows[0].active,false);
  assert.equal((await db.query('select active from users where id=$1',[teacherRecord.uid])).rows[0].active,true);
  await request('/integrations/schools/sync',{cookie:null,status:401});
+ const targeted=await (await request('/integrations/schools/sync?subject='+student.subject,{cookie:null,token:process.env.CRON_SECRET})).json();assert.equal(targeted.address,'luka.kovac@skolehr.xyz');assert.equal(targeted.created,false);
+ await request('/integrations/schools/sync?subject='+randomUUID(),{cookie:null,token:process.env.CRON_SECRET,status:404});
 });
 
 test('A school role change stops the previous mail identity until administrator review',async()=>{
