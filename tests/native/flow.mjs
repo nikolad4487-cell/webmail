@@ -106,10 +106,12 @@ test('Odgovor preko probnog Mailjeta i kopija u Poslano',async()=>{
   assert.match(result.warning,/nije stvarno poslana/);
   assert.equal(sent.length,1);assert.equal(sent[0].body.SandboxMode,true);
   const msg=sent[0].body.Messages[0];assert.equal(msg.From.Email,'demo@skolehr.xyz');assert.equal(msg.To[0].Email,'sender@example.test');
+  assert.equal(msg.From.Name,'Demo'); // The owner's name, not the address used as mailbox label.
   assert.equal(msg.Headers['In-Reply-To'],'<native-pilot@example.test>');
   assert.equal(Buffer.from(msg.Attachments[0].Base64Content,'base64').toString(),'Reply attachment');
   assert.equal(sent[0].authorization,'Basic '+Buffer.from('local-key:local-secret').toString('base64'));
   const copies=(await request('/mail/'+box+'?folder=sent')).body;assert.equal(copies.length,1);assert.equal(copies[0].inReplyTo,'<native-pilot@example.test>');
+  assert.equal(copies[0].from,'Demo');
   const sentLocation=new URLSearchParams({id:copies[0].id,path:copies[0].path});
   const saved=(await request('/mail/'+box+'/message?'+sentLocation)).body;
   assert.equal(saved.text.trim(),'Odgovor.');assert.equal(saved.attachments[0].name,'odgovor.txt');

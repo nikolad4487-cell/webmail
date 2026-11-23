@@ -307,7 +307,9 @@ api.post('/mail/:box/send',async(req,res)=>{
     const alias=await db.query('select 1 from aliases a join domains d on d.name=$3 and d.outbound where a.box=$1 and a.address=$2 and a.send_as',[m.id,input.from,addressing(input.from)]);
     if(!alias.rowCount) deny();
   }
-  const mail:Outgoing={...input,attachments:input.attachments?.map(x=>({filename:x.filename,content:Buffer.from(x.data,'base64')}))};
+  const owner=m.shared?undefined:(await db.query('select name from users where org=$1 and email=$2',[m.org,m.address])).rows[0];
+  const fromName=String(owner?.name||m.label||user(req).name).replace(/[\r\n\0]/g,' ').trim();
+  const mail:Outgoing={...input,fromName,attachments:input.attachments?.map(x=>({filename:x.filename,content:Buffer.from(x.data,'base64')}))};
   const raw=await mime(mail);
   if(await isNative(m.address) && raw.length>MAX_NATIVE_BYTES)throw new HttpError(413,'Poruka prelazi ograničenje od 3 MB.');
   async function retireDraft(){
