@@ -345,7 +345,8 @@ app.use((err:unknown,_req:express.Request,res:express.Response,_next:express.Nex
   const code=(err as {code?:string}).code;
   if(['23505','23503','23514'].includes(code || '')){res.status(409).json({error:'Podatak već postoji ili nije dopuštena ta veza.'});return;}
   if((err as {status?:number}).status===413){res.status(413).json({error:'Zahtjev je prevelik.'});return;}
-  console.error('Greška zahtjeva', code || (err as Error).name);
+  console.error('Greška zahtjeva',JSON.stringify({code:code||undefined,name:(err as Error).name,
+    database:loginDatabaseIssue(err),frames:(err as Error).stack?.split('\n').filter(line=>/^\s+at /.test(line)).slice(0,5)}));
   res.status(502).json({error:'Radnja trenutno nije dostupna. Provjerite vezu sa servisom.'});
 });
 
