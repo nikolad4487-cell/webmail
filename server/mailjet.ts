@@ -2,7 +2,7 @@ import {db,transaction} from './db.js';
 import {HttpError,type Outgoing,demo} from './mail.js';
 import {enabledNativeAddress} from './inbound.js';
 
-export async function sendMailjet(account:string,input:Outgoing,fromName?:string){
+export async function sendMailjet(account:string,input:Outgoing,fromName=input.fromName){
   if(!(await enabledNativeAddress(account)) || input.from!==account)throw new HttpError(403,'Pošiljatelj nije omogućen za probu.');
   const key=process.env.MAILJET_API_KEY,secret=process.env.MAILJET_SECRET_KEY;
   if(!key||!secret)throw new HttpError(503,'Mailjet nije konfiguriran.');

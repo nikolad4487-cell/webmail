@@ -97,9 +97,9 @@ export async function message(address: string, path: string, id: number, markRea
     } finally { lock.release(); }
   });
 }
-export type Outgoing = {from:string;to:string[];subject:string;text:string;replyTo?:string;inReplyTo?:string;attachments?:{filename:string;content:Buffer}[];headers?:Record<string,string>};
+export type Outgoing = {from:string;fromName?:string;to:string[];subject:string;text:string;replyTo?:string;inReplyTo?:string;attachments?:{filename:string;content:Buffer}[];headers?:Record<string,string>};
 export async function mime(input: Outgoing) {
-  return (await nodemailer.createTransport({streamTransport:true,buffer:true,newline:'windows',disableFileAccess:true,disableUrlAccess:true}).sendMail(input)).message as Buffer;
+  return (await nodemailer.createTransport({streamTransport:true,buffer:true,newline:'windows',disableFileAccess:true,disableUrlAccess:true}).sendMail({...input,from:input.fromName?{name:input.fromName,address:input.from}:input.from})).message as Buffer;
 }
 export async function smtp(account: string, input: Outgoing, raw: Buffer) {
   if(await isNative(account)){
