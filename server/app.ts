@@ -1,4 +1,5 @@
 import {setupElectronicIdentity} from './electronic-identity.js';
+import {bulkMail,emptyMail} from './mail-actions.js';
 import {matchesPassword,newPassword,sharedPassword,verifyCurrentPassword} from './passwords.js';
 import {setupInbound} from './inbound.js';
 import {isNative,changeNative,MAX_NATIVE_BYTES} from './native-mail.js';
@@ -251,6 +252,15 @@ async function box(req:Request, send=false){
   return record;
 }
 const location=z.object({path:z.string().min(1).max(250),id});
+api.post('/mail/:box/bulk',async(req,res)=>{
+ const body=z.object({action:z.enum(['trash','junk','inbox','read','unread','star','unstar','delete']),messages:z.array(location).min(1).max(200)}).strict().parse(req.body);
+ const m=await box(req,['trash','junk','inbox','delete'].includes(body.action));
+ res.json(await bulkMail(m.address,body.action,body.messages));
+});
+api.post('/mail/:box/empty',async(req,res)=>{
+ const body=z.object({folder:z.enum(['trash','junk'])}).strict().parse(req.body),m=await box(req,true);
+ res.json(await emptyMail(m.address,body.folder));
+});
 api.get('/mail/:box',async(req,res)=>{
   const m=await box(req);
   res.json(await listing(m.address,String(req.query.folder || 'inbox'),z.string().max(200).parse(req.query.q || '')));
