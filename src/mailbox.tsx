@@ -7,6 +7,8 @@ type Row={id:number;path:string;subject:string;from:string;address:string;date:s
 type Message={subject:string;text:string;from?:{name:string;address:string};replyTo?:string;to:string[];date:string;messageId?:string;attachments:{name:string;size:number}[]};
 type Compose={title:string;to:string;subject:string;text:string;inReplyTo?:string;source?:Row;draftId?:number};
 type Quota={used:number|null;limit:number|null;target:number};
+type MailAction='trash'|'junk'|'inbox'|'read'|'unread'|'star'|'unstar'|'delete';
+const rowKey=(row:Row)=>row.path+':'+row.id;
 const empty=(to=''):Compose=>({title:'Nova poruka',to,subject:'',text:''});
 const at=(value:string,full=false)=>value?new Intl.DateTimeFormat('hr-HR',full?{dateStyle:'long',timeStyle:'short',timeZone:'Europe/Zagreb'}:{hour:'2-digit',minute:'2-digit',timeZone:'Europe/Zagreb'}).format(new Date(value)):'';
 const size=(bytes:number)=>bytes<1024?bytes+' B':Math.round(bytes/1024)+' KB';
@@ -37,14 +39,17 @@ export function Mailbox({session,recipient,clearRecipient}:{session:Session;reci
   const [rows,setRows]=useState<Row[]>([]),[selected,setSelected]=useState<Row>(),[msg,setMsg]=useState<Message>();
   const [quota,setQuota]=useState<Quota>(),[compose,setCompose]=useState<Compose>(),[mobileReader,setMobileReader]=useState(false);
   const [grouped,setGrouped]=useState(false);
+  const [checked,setChecked]=useState<Set<string>>(()=>new Set()),[actionBusy,setActionBusy]=useState(false);
+  const picked=rows.filter(row=>checked.has(rowKey(row))),destructiveFolder=folder==='trash'||folder==='junk';
+  useEffect(()=>setChecked(new Set()),[base,folder,searchTerm]);
   const [busy,setBusy]=useState(true),[refresh,setRefresh]=useState(0),[error,setError]=useState(''),[notice,setNotice]=useState('');
   useEffect(()=>{const timer=setTimeout(()=>setSearchTerm(search),250);return ()=>clearTimeout(timer);},[search]);
   useEffect(()=>{
     if(!box)return;
-    let active=true;setBusy(true);setError('');
+    let active=true;setBusy(true);
     api<Row[]>(base+'?'+new URLSearchParams({folder,q:searchTerm})).then(list=>{
       if(!active)return;
-      setRows(list);setSelected(current=>list.find(x=>x.id===current?.id&&x.path===current?.path)||list[0]);
+      setRows(list);setChecked(current=>new Set([...current].filter(key=>list.some(row=>rowKey(row)===key))));setSelected(current=>list.find(x=>x.id===current?.id&&x.path===current?.path)||list[0]);
     }).catch(e=>{if(active){setError(toError(e));setRows([]);setSelected(undefined);}}).finally(()=>{if(active)setBusy(false);});
     return ()=>{active=false;};
   },[base,folder,searchTerm,refresh,box]);
@@ -56,6 +61,7 @@ export function Mailbox({session,recipient,clearRecipient}:{session:Session;reci
   },[base,selected?.id,selected?.path]);
   useEffect(()=>{if(recipient && box?.can_send){setCompose(empty(recipient));setMobileReader(true);clearRecipient();}},[recipient,box]);
   async function flag(row:Row,flag:'read'|'star',value:boolean){
+    if(actionBusy)return;
     try{
       await api(base+'/message','PATCH',{path:row.path,id:row.id,flag,value});
       setRows(list=>list.map(x=>x.id===row.id && x.path===row.path?{...x,[flag]:value}:x));
@@ -63,14 +69,34 @@ export function Mailbox({session,recipient,clearRecipient}:{session:Session;reci
       if(folder==='starred'&&flag==='star'&&!value)setRefresh(x=>x+1);
     }catch(e){setError(toError(e));}
   }
-  async function move(row:Row,destination:string){
-    try{
-      await api(base+'/move','POST',{path:row.path,id:row.id,destination});
-      setSelected(undefined);setMsg(undefined);setMobileReader(false);setRefresh(x=>x+1);
-    }catch(e){setError(toError(e));}
+  function toggleRows(items:Row[]){
+    setChecked(current=>{const next=new Set(current),remove=items.every(row=>next.has(rowKey(row)));for(const row of items)if(remove)next.delete(rowKey(row));else next.add(rowKey(row));return next;});
   }
+  async function act(action:MailAction,items:Row[]=picked){
+    if(actionBusy||!items.length)return;
+    if(action==='delete'&&!window.confirm(`Trajno obrisati ${items.length} označenih poruka i njihove privitke? Brisanje se ne može poništiti.`))return;
+    setActionBusy(true);setError('');setNotice('');
+    try{
+      const result=await api<{affected:number;freedBytes:number|null}>(base+'/bulk','POST',{action,messages:items.map(({id,path})=>({id,path}))});
+      setNotice((action==='delete'?'Trajno obrisano: ':'Obrađeno poruka: ')+result.affected+(result.freedBytes?' · Oslobođeno '+quotaLabel(result.freedBytes):''));
+      setSelected(undefined);setMsg(undefined);setMobileReader(false);
+    }catch(e){setError(toError(e));}
+    finally{setChecked(new Set());setRefresh(x=>x+1);setActionBusy(false);}
+  }
+  async function emptyFolder(){
+    if(actionBusy||!destructiveFolder)return;
+    if(!window.confirm(`Trajno obrisati SVE poruke i privitke iz mape ${folder==='trash'?'Otpad':'Neželjena pošta'}, uključujući poruke koje nisu prikazane? Brisanje se ne može poništiti.`))return;
+    setActionBusy(true);setError('');setNotice('');
+    try{
+      const result=await api<{affected:number;freedBytes:number|null}>(base+'/empty','POST',{folder});
+      setNotice('Trajno obrisano: '+result.affected+(result.freedBytes?' · Oslobođeno '+quotaLabel(result.freedBytes):''));
+      setSelected(undefined);setMsg(undefined);setMobileReader(false);
+    }catch(e){setError(toError(e));}
+    finally{setChecked(new Set());setRefresh(x=>x+1);setActionBusy(false);}
+  }
+  async function move(row:Row,destination:string){await act(destination as MailAction,[row]);}
   function changeFolder(key:string){
-    setFolder(key);setRows([]);setSelected(undefined);setMobileReader(false);setCompose(undefined);
+    setError('');setNotice('');setChecked(new Set());setFolder(key);setRows([]);setSelected(undefined);setMobileReader(false);setCompose(undefined);
   }
   function openRow(row:Row){setCompose(undefined);setSelected(row);setMobileReader(true);if(!row.read)void flag(row,'read',true);}
   function reply(forward=false){
@@ -85,22 +111,43 @@ export function Mailbox({session,recipient,clearRecipient}:{session:Session;reci
     <aside className="sidebar mail-sidebar">
       <button className="primary new-message" disabled={!box?.can_send} onClick={()=>{setCompose(empty());setMobileReader(true);}}><Pencil size={18}/> Nova poruka</button>
       <label className="section-label" htmlFor="box-select">Sandučić</label>
-      <div className="box-picker"><Inbox size={17}/><select id="box-select" value={boxId??''} onChange={e=>{setBoxId(Number(e.target.value));changeFolder('inbox');setSearch('');}}>{!box&&<option value="">Nema sandučića</option>}{session.boxes.map(x=><option value={x.id} key={x.id}>{x.label==='Osobni sandučić'?x.address:x.label}</option>)}</select><ChevronDown size={15}/></div>
-      <nav className="folder-list" aria-label="Mape pošte">{folders.map(({key,label,icon:Icon})=><button key={key} className={folder===key?'active':''} onClick={()=>{if(folder!==key)changeFolder(key);else setMobileReader(false);}}><Icon size={19}/><span>{label}</span>{folder===key && rows.length>0&&<small>{rows.length}</small>}</button>)}</nav>
+      <div className="box-picker"><Inbox size={17}/><select id="box-select" disabled={actionBusy} value={boxId??''} onChange={e=>{setBoxId(Number(e.target.value));changeFolder('inbox');setSearch('');}}>{!box&&<option value="">Nema sandučića</option>}{session.boxes.map(x=><option value={x.id} key={x.id}>{x.label==='Osobni sandučić'?x.address:x.label}</option>)}</select><ChevronDown size={15}/></div>
+      <nav className="folder-list" aria-label="Mape pošte">{folders.map(({key,label,icon:Icon})=><button key={key} disabled={actionBusy} className={folder===key?'active':''} onClick={()=>{if(folder!==key)changeFolder(key);else setMobileReader(false);}}><Icon size={19}/><span>{label}</span>{folder===key && rows.length>0&&<small>{rows.length}</small>}</button>)}</nav>
       <div className="storage"><span className="storage-title"><Archive size={16}/> Pohrana sandučića</span>{quota?.used!=null && quota.limit!=null?<><progress max={quota.limit||1} value={quota.used}/><small>{quotaLabel(quota.used)} od {quotaLabel(quota.limit)}</small></>:<small>{quota?'Kvotu ne prijavljuje poslužitelj.':'Kvota nije dostupna.'}</small>}</div>
     </aside>
-    <section className="message-list"><div className="list-heading"><div className="heading-line"><h1>{heading}</h1><div className="actions"><button className={'icon secondary '+(grouped?'starred':'')} aria-label="Prikaži razgovore" aria-pressed={grouped} onClick={()=>setGrouped(x=>!x)}><Layers size={17}/></button><button className="icon secondary" title="Osvježi poštu" onClick={()=>setRefresh(x=>x+1)}><RefreshCw size={17}/></button></div></div><label className="search"><Search size={18}/><input aria-label="Pretraži poštu" placeholder="Pretraži poštu…" value={search} onChange={e=>setSearch(e.target.value)}/>{search&&<button className="icon ghost" aria-label="Očisti pretragu" onClick={()=>setSearch('')}><X size={15}/></button>}</label></div>
-      <div className="list-meta">{busy?'Učitavanje…':rows.length===1?'1 poruka':rows.length+' poruka'}</div>
-      <div className="rows">{groups.map((group,index)=>{const row=group[0];return <button key={row.path+row.id} className={'mail-row '+(group===thread?'selected':'')} onClick={()=>openRow(row)}>
-        <span className={'avatar tone-'+index%4}>{initials(row.from)}</span><span className="row-main"><strong>{row.from}</strong><span>{row.subject}{group.length>1 && ` · ${group.length}`}</span></span><span className="row-end"><small>{at(row.date)}</small><span>{row.star&&<Star size={13} fill="currentColor"/>}{row.attachment&&<Paperclip size={14}/>} {!row.read&&<i className="unread"/>}</span></span>
-      </button>;})}</div>
+    <section className="message-list"><div className="list-heading"><div className="heading-line"><h1>{heading}</h1><div className="actions"><button className={'icon secondary '+(grouped?'starred':'')} disabled={actionBusy} aria-label="Prikaži razgovore" aria-pressed={grouped} onClick={()=>setGrouped(x=>!x)}><Layers size={17}/></button><button className="icon secondary" disabled={actionBusy} title="Osvježi poštu" onClick={()=>{setError('');setRefresh(x=>x+1);}}><RefreshCw size={17}/></button></div></div><label className="search"><Search size={18}/><input disabled={actionBusy} aria-label="Pretraži poštu" placeholder="Pretraži poštu…" value={search} onChange={e=>setSearch(e.target.value)}/>{search&&<button className="icon ghost" disabled={actionBusy} aria-label="Očisti pretragu" onClick={()=>setSearch('')}><X size={15}/></button>}</label></div>
+      <div className="list-meta">{busy?'Učitavanje…':rows.length===1?'1 poruka':rows.length+' poruka'}{rows.length>=80&&' · prikazano najviše 80'}</div>
+      <div className="mail-selection">
+        <label className="check"><input type="checkbox" aria-label="Označi sve prikazane poruke" disabled={busy||actionBusy||!rows.length} checked={!!rows.length&&picked.length===rows.length} ref={node=>{if(node)node.indeterminate=picked.length>0&&picked.length<rows.length;}} onChange={()=>toggleRows(rows)}/><span>{picked.length?'Označeno: '+picked.length:'Označi prikazane'}</span></label>
+        {box?.can_send&&destructiveFolder&&<button className="secondary danger" disabled={busy||actionBusy} onClick={()=>void emptyFolder()}>{folder==='trash'?'Isprazni otpad':'Isprazni neželjenu poštu'}</button>}
+      </div>
+      {picked.length>0&&<div className="bulk-actions" role="group" aria-label="Radnje za označene poruke">
+        <button className="icon secondary" aria-label="Označi odabrane kao pročitane" title="Označi kao pročitano" disabled={actionBusy} onClick={()=>void act('read')}><MailOpen size={17}/></button>
+        <button className="icon secondary" aria-label="Označi odabrane kao nepročitane" title="Označi kao nepročitano" disabled={actionBusy} onClick={()=>void act('unread')}><Mail size={17}/></button>
+        <button className="icon secondary" aria-label="Označi odabrane zvjezdicom" title="Dodaj zvjezdicu" disabled={actionBusy} onClick={()=>void act('star')}><Star size={17}/></button>
+        <button className="icon secondary" aria-label="Ukloni zvjezdicu s odabranih" title="Ukloni zvjezdicu" disabled={actionBusy} onClick={()=>void act('unstar')}><Star size={17} fill="currentColor"/></button>
+        {box?.can_send&&<>
+          {folder!=='trash'&&<button className="icon secondary" aria-label="Premjesti odabrane u otpad" title="Premjesti u otpad" disabled={actionBusy} onClick={()=>void act('trash')}><Trash2 size={17}/></button>}
+          {folder!=='junk'&&<button className="icon secondary" aria-label="Premjesti odabrane u neželjenu poštu" title="Premjesti u neželjenu poštu" disabled={actionBusy} onClick={()=>void act('junk')}><ShieldAlert size={17}/></button>}
+          {folder!=='inbox'&&<button className="icon secondary" aria-label="Vrati odabrane u pristiglu poštu" title="Vrati u pristiglu poštu" disabled={actionBusy} onClick={()=>void act('inbox')}><Inbox size={17}/></button>}
+          {destructiveFolder&&<button className="secondary danger" disabled={actionBusy} onClick={()=>void act('delete')}><Trash2 size={17}/> Obriši trajno</button>}
+        </>}
+        <button className="icon secondary" aria-label="Poništi odabir" title="Poništi odabir" disabled={actionBusy} onClick={()=>setChecked(new Set())}><X size={17}/></button>
+      </div>}
+      {actionBusy&&<p className="mail-status" role="status">Obrada poruka…</p>}
+      {!mobileReader&&error&&<p className="error" role="alert">{error}</p>}{!mobileReader&&notice&&<p className="notice" role="status">{notice}</p>}
+      <div className="rows">{groups.map((group,index)=>{const row=group[0],all=group.every(item=>checked.has(rowKey(item))),some=group.some(item=>checked.has(rowKey(item)));return <div key={rowKey(row)} className={'mail-item '+(all?'checked':'')}>
+        <input type="checkbox" aria-label={group.length>1?`Označi razgovor: ${row.subject} (${group.length} poruka)`:`Označi poruku: ${row.subject}`} disabled={busy||actionBusy} checked={all} ref={node=>{if(node)node.indeterminate=some&&!all;}} onChange={()=>toggleRows(group)}/>
+        <button className={'mail-row '+(group===thread?'selected':'')} disabled={actionBusy} onClick={()=>openRow(row)}>
+          <span className={'avatar tone-'+index%4}>{initials(row.from)}</span><span className="row-main"><strong>{row.from}</strong><span>{row.subject}{group.length>1 && ` · ${group.length}`}</span></span><span className="row-end"><small>{at(row.date)}</small><span>{row.star&&<Star size={13} fill="currentColor"/>}{row.attachment&&<Paperclip size={14}/>} {!row.read&&<i className="unread"/>}</span></span>
+        </button></div>;})}</div>
       {!busy&&!rows.length&&<div className="empty compact"><Inbox size={26}/><p>{searchTerm?'Nema rezultata pretrage.':'U ovoj mapi nema poruka.'}</p></div>}
     </section>
     <section className="reader"><button className="mobile-back secondary" onClick={()=>{setMobileReader(false);setCompose(undefined);}}><ArrowLeft size={17}/> Popis poruka</button>
-      {error&&<p className="error" role="alert">{error}</p>}{notice&&<p className="notice" role="status">{notice}</p>}
+      {mobileReader&&error&&<p className="error" role="alert">{error}</p>}{mobileReader&&notice&&<p className="notice" role="status">{notice}</p>}
       {compose&&box?<Composer key={compose.title+compose.subject} initial={compose} box={box} base={base} close={()=>setCompose(undefined)} done={(message)=>{setCompose(undefined);setNotice(message);setRefresh(x=>x+1);}}/>:
       msg&&selected?<article className="message">
-        <div className="reader-heading"><h2>{msg.subject||'(Bez predmeta)'}</h2><div className="actions"><button className={'icon secondary '+(selected.star?'starred':'')} aria-label={selected.star?'Ukloni oznaku':'Označi zvjezdicom'} onClick={()=>flag(selected,'star',!selected.star)}><Star size={18} fill={selected.star?'currentColor':'none'}/></button><button className="icon secondary" title={selected.read?'Označi kao nepročitano':'Označi kao pročitano'} onClick={()=>flag(selected,'read',!selected.read)}>{selected.read?<Mail size={18}/>:<MailOpen size={18}/>}</button>{box?.can_send&&folder!=='trash'&&<button className="icon secondary" title="Premjesti u otpad" onClick={()=>move(selected,'trash')}><Trash2 size={17}/></button>}</div></div>
+        <div className="reader-heading"><h2>{msg.subject||'(Bez predmeta)'}</h2><div className="actions"><button className={'icon secondary '+(selected.star?'starred':'')} disabled={actionBusy} aria-label={selected.star?'Ukloni oznaku':'Označi zvjezdicom'} onClick={()=>flag(selected,'star',!selected.star)}><Star size={18} fill={selected.star?'currentColor':'none'}/></button><button className="icon secondary" disabled={actionBusy} title={selected.read?'Označi kao nepročitano':'Označi kao pročitano'} onClick={()=>flag(selected,'read',!selected.read)}>{selected.read?<Mail size={18}/>:<MailOpen size={18}/>}</button>{box?.can_send&&(destructiveFolder?<button className="secondary danger" disabled={actionBusy} onClick={()=>void act('delete',[selected])}><Trash2 size={17}/> Obriši trajno</button>:<button className="icon secondary" title="Premjesti u otpad" disabled={actionBusy} onClick={()=>move(selected,'trash')}><Trash2 size={17}/></button>)}</div></div>
         {thread&&thread.length>1&&<nav className="thread-links" aria-label="Poruke razgovora">{thread.map(row=><button key={row.path+row.id} className="secondary" aria-pressed={row===selected} onClick={()=>openRow(row)}>{row.from} · {at(row.date)}</button>)}</nav>}
         <div className="sender"><span className="avatar big">{initials(msg.from?.name||msg.from?.address||'?')}</span><div><strong>{msg.from?.name||msg.from?.address||'Nepoznato'}</strong>{msg.from?.name&&<span className="sender-address">{msg.from.address}</span>}<small>Za: {msg.to.join(', ')}</small></div><time>{at(msg.date,true)}</time></div>
         <div className="message-body">{msg.text||'Poruka nema tekstualni sadržaj.'}</div>

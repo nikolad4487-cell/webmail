@@ -25,7 +25,9 @@
     "test:formapoint": "node --import tsx --test tests/formapoint/flow.mjs",
     "test:welcome": "node --import tsx --test tests/formapoint/welcome.mjs",
     "test:schools": "node --import tsx --test tests/schools/*.mjs",
-    "test:layout": "node tests/browser/responsive.mjs"
+    "test:layout": "node tests/browser/responsive.mjs",
+    "test:mail-actions": "node --import tsx --test tests/mail-actions/*.mjs",
+    "test:mail-actions:browser": "node tests/browser/mail-bulk.mjs"
   },
   "repository": {
     "type": "git",

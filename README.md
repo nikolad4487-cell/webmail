@@ -688,3 +688,27 @@ uključuje opseg škole, nepromijenjen PIN, učenika/roditelja, Unicode PDF, pro
 učiteljske lozinke i nedostupan izvor. Regresije: native, provisioning, lozinke,
 FormaPoint, welcome, Prisma-style migracije/RLS i build. e-Matica ima svoj build i
 testove. PDF je renderiran i vizualno pregledan s izmišljenim podacima.
+
+
+## Skupne radnje i trajno brisanje pošte
+
+Svaka mapa, uključujući Označeno, ima zasebne kućice za odabir poruka i odabir
+svih trenutačno prikazanih poruka. U prikazu razgovora kućica bira sve poruke tog
+razgovora. Skupne radnje podržavaju pročitano/nepročitano, zvjezdicu i premještanje.
+Trajno brisanje dopušteno je samo za Otpad i Neželjenu poštu, uz potvrdu u sučelju.
+Gumbi za pražnjenje brišu cijelu odabranu mapu, uključujući poruke izvan ograničenja
+popisa od 80. Native pohrana uklanja MIME i privitke u jednoj transakciji, a kvota
+se odmah računa iz preostalih poruka. Tuđi ili zastarjeli identifikator poništava
+cijelu native skupnu radnju. Brisanje/premještanje zahtijeva postojeću ovlast
+`can_send`; korisnik s ovlasti samo čitanja ne može brisati.
+
+IMAP koristi stvarne posebne mape i UID-ove. Za trajno brisanje samo odabranih
+poruka potreban je UIDPLUS, kako EXPUNGE ne bi obrisao druge označene poruke.
+Poslužitelji bez UIDPLUS i dalje podržavaju izričito pražnjenje cijele mape.
+IMAP promjene kroz više mapa nisu atomske; nakon pogreške prikazuje se uputa za
+osvježavanje, bez automatskog ponovnog brisanja.
+
+Provjere: `TEST_MAIL_ACTIONS_DATABASE_URL=... npm run test:mail-actions` na praznoj
+lokalnoj bazi i `npm run test:mail-actions:browser`. Obuhvaćeni su izolacija
+sandučića, ovlasti samo čitanja, brisanje privitaka, oslobađanje kvote, pražnjenje
+više od 80 poruka, IMAP UID-ovi i sve mape na mobilnom i desktop prikazu.
